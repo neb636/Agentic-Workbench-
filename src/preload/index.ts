@@ -1,0 +1,38 @@
+import { contextBridge, ipcRenderer } from "electron";
+import { IPC } from "../shared/ipc";
+import type {
+  PersistedState,
+  PtyCreateOptions,
+  PtyDataEvent,
+  PtyExitEvent,
+  WorkbenchApi,
+} from "../shared/models";
+
+const api: WorkbenchApi = {
+  platform: process.platform,
+  persistence: {
+    load: () => ipcRenderer.invoke(IPC.persistenceLoad) as Promise<PersistedState>,
+    save: (state) => ipcRenderer.invoke(IPC.persistenceSave, state) as Promise<void>,
+  },
+  workspace: {
+    chooseDirectory: () => ipcRenderer.invoke(IPC.workspaceChooseDirectory) as Promise<string | null>,
+  },
+  pty: {
+    create: (options: PtyCreateOptions) => ipcRenderer.invoke(IPC.ptyCreate, options) as Promise<string>,
+    input: (sessionId, data) => ipcRenderer.send(IPC.ptyInput, { sessionId, data }),
+    resize: (sessionId, cols, rows) => ipcRenderer.send(IPC.ptyResize, { sessionId, cols, rows }),
+    terminate: (sessionId) => ipcRenderer.send(IPC.ptyTerminate, { sessionId }),
+    onData: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: PtyDataEvent) => listener(payload);
+      ipcRenderer.on(IPC.ptyData, wrapped);
+      return () => ipcRenderer.removeListener(IPC.ptyData, wrapped);
+    },
+    onExit: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: PtyExitEvent) => listener(payload);
+      ipcRenderer.on(IPC.ptyExit, wrapped);
+      return () => ipcRenderer.removeListener(IPC.ptyExit, wrapped);
+    },
+  },
+};
+
+contextBridge.exposeInMainWorld("workbench", api);
