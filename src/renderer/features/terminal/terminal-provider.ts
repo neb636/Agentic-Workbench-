@@ -1,8 +1,9 @@
-import type { SessionProvider } from "../../core/session-provider-registry";
+import type { TerminalSessionProvider } from "../../core/session-provider-registry";
 
-export const localTerminalProvider: SessionProvider = {
+export const localTerminalProvider: TerminalSessionProvider = {
   id: "terminal.local",
   label: "Local terminal",
+  kind: "terminal",
   async create(context) {
     // The identifier is assigned after listeners are installed so early PTY output can be buffered.
     // eslint-disable-next-line prefer-const

@@ -1,7 +1,7 @@
 import { services } from "../core/services";
 import { useWorkbenchStore } from "../state/workbench-store";
 import { AgentView } from "../features/agent/AgentView";
-import { previewAgentProvider } from "../features/agent/preview-provider";
+import { codexAgentProvider } from "../features/agent/codex-agent-provider";
 import { TerminalView } from "../features/terminal/TerminalView";
 import { localTerminalProvider } from "../features/terminal/terminal-provider";
 import { PersonaWidget } from "../features/personas/PersonaWidget";
@@ -20,7 +20,7 @@ export function registerFirstPartyContributions(): void {
     description: "A prompt-driven agent session with contextual support.",
     icon: AgentIcon,
     component: AgentView,
-    createState: () => ({ providerId: "agent.preview" }),
+    createState: () => ({ providerId: codexAgentProvider.id }),
   });
   services.views.register({
     id: "terminal",
@@ -31,7 +31,7 @@ export function registerFirstPartyContributions(): void {
     createState: () => ({ providerId: "terminal.local" }),
   });
 
-  services.sessions.register(previewAgentProvider);
+  services.sessions.register(codexAgentProvider);
   services.sessions.register(localTerminalProvider);
 
   services.widgets.register({ id: "persona", slot: "agent.composer.support", order: 10, component: PersonaWidget });

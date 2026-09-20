@@ -43,15 +43,41 @@ try {
   check("workspace added", await page.getByText(workspacePath).first().isVisible());
   check("agent view opens by default", await page.getByRole("region", { name: "Agent session" }).isVisible());
   check("registry widgets visible", await page.getByText("Persona", { exact: true }).isVisible() && await page.getByText("Appended instructions", { exact: true }).isVisible());
+  await page.getByText("Ready", { exact: true }).waitFor({ timeout: 10_000 });
+
+  await page.getByRole("button", { name: "Manage personas" }).click();
+  await page.getByRole("dialog", { name: "Manage personas" }).waitFor();
+  await page.getByRole("button", { name: "Create persona" }).click();
+  await page.getByRole("textbox", { name: "Name" }).fill("Contribution verifier");
+  await page.getByRole("textbox", { name: "Description" }).fill("Used by real-agent QA");
+  await page.getByRole("textbox", { name: "Instructions" }).fill("Begin your response with the exact marker PERSONA_INCLUDED.");
+  await page.getByRole("button", { name: "Save persona" }).click();
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.locator(".support-card .select-trigger").first().click();
+  await page.getByRole("option", { name: /Contribution verifier/ }).click();
+  await page.getByRole("button", { name: "Add instruction" }).click();
+  await page.getByRole("textbox", { name: "Instruction 1" }).fill("End your response with the exact marker APPENDED_INCLUDED.");
+  await page.getByRole("textbox", { name: "Prompt" }).fill("Reply in one short sentence. Do not inspect or modify files and do not run commands.");
+  await page.getByRole("button", { name: "Send prompt" }).click();
+  check("prompt submitted", await page.getByText("Reply in one short sentence. Do not inspect or modify files and do not run commands.").isVisible());
+  check("prompt contributions assembled", await page.getByText("2 prompt contributions").isVisible());
+  const assistantOutput = page.locator(".agent-output-assistant").last();
+  await assistantOutput.getByText("PERSONA_INCLUDED", { exact: false }).waitFor({ timeout: 120_000 });
+  await assistantOutput.getByText("APPENDED_INCLUDED", { exact: false }).waitFor({ timeout: 120_000 });
+  await page.getByText("Ready", { exact: true }).waitFor({ timeout: 120_000 });
+  check("real agent output received", true);
+  check("persona contribution reached provider", true);
+  check("appended instruction reached provider", true);
 
   await page.locator(".support-card .select-trigger").first().click();
-  await page.getByRole("option", { name: /Thoughtful collaborator/ }).click();
-  await page.getByRole("button", { name: "Add instruction" }).click();
-  await page.getByRole("textbox", { name: "Instruction 1" }).fill("Keep the final answer focused on observable outcomes.");
-  await page.getByRole("textbox", { name: "Prompt" }).fill("Outline the next milestone.");
+  await page.getByRole("option", { name: /No persona/ }).click();
+  await page.getByText("Instruction 1", { exact: true }).click();
+  await page.getByRole("textbox", { name: "Prompt" }).fill("Run the shell command sleep 30, then reply DONE. Do not modify files.");
   await page.getByRole("button", { name: "Send prompt" }).click();
-  check("prompt submitted", await page.getByText("Outline the next milestone.").isVisible());
-  check("prompt contributions assembled", await page.getByText("2 prompt contributions").isVisible());
+  await page.getByText("Running", { exact: true }).waitFor({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByText("Interrupted", { exact: true }).waitFor({ timeout: 10_000 });
+  check("agent turn can be interrupted", true);
 
   await page.getByRole("button", { name: "Manage personas" }).click();
   await page.getByRole("dialog", { name: "Manage personas" }).waitFor();
@@ -83,9 +109,14 @@ try {
 
   await page.getByRole("tab", { name: /New session/ }).click();
   check("tab switching", await page.getByRole("region", { name: "Agent session" }).isVisible());
+  await page.getByRole("textbox", { name: "Prompt" }).fill("Run the shell command sleep 30, then reply DONE. This session will be closed; do not modify files.");
+  await page.getByRole("button", { name: "Send prompt" }).click();
+  await page.getByText("Running", { exact: true }).waitFor({ timeout: 10_000 });
+  await page.getByRole("tab", { name: /New session/ }).getByRole("button", { name: /Close New session/ }).click();
+  await page.waitForTimeout(3_500);
+  check("closing a running agent returns to the terminal", await page.getByRole("region", { name: "Terminal session" }).isVisible());
   await page.getByRole("tab", { name: /Terminal/ }).getByRole("button", { name: /Close Terminal/ }).click();
   check("tab closing", await page.getByRole("tab", { name: /Terminal/ }).count() === 0);
-  await page.getByRole("tab", { name: /New session/ }).getByRole("button", { name: /Close New session/ }).click();
   check("closing final tab exposes recovery state", await page.getByRole("heading", { name: "Open a view" }).isVisible());
   await page.getByRole("button", { name: "Agent", exact: true }).click();
   check("view can be reopened after closing final tab", await page.getByRole("region", { name: "Agent session" }).isVisible());

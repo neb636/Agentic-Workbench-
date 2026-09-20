@@ -58,3 +58,15 @@ export const ptyResizeSchema = z.object({
 });
 
 export const ptyTerminateSchema = z.object({ sessionId: z.string() });
+
+export const agentSessionCreateOptionsSchema = z.object({
+  providerId: z.string().min(1),
+  workspacePath: z.string().min(1),
+});
+
+export const agentPromptSchema = z.object({
+  sessionId: z.string().min(1),
+  prompt: z.string().trim().min(1).max(500_000),
+});
+
+export const agentSessionActionSchema = z.object({ sessionId: z.string().min(1) });

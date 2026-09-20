@@ -8,4 +8,9 @@ export const IPC = {
   ptyTerminate: "pty:terminate",
   ptyData: "pty:data",
   ptyExit: "pty:exit",
+  agentCreate: "agent:create",
+  agentSendPrompt: "agent:send-prompt",
+  agentInterrupt: "agent:interrupt",
+  agentTerminate: "agent:terminate",
+  agentEvent: "agent:event",
 } as const;

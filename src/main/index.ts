@@ -1,9 +1,16 @@
 import { app, BrowserWindow, shell } from "electron";
 import path from "node:path";
+import { AgentSessionManager } from "./agent-session-manager";
 import { registerIpc } from "./ipc";
+import { ProcessManager } from "./process-manager";
+import { CodexAgentProvider } from "./providers/codex-agent-provider";
 import { PtyManager } from "./pty-manager";
 
 const ptyManager = new PtyManager();
+const processManager = new ProcessManager();
+const agentSessionManager = new AgentSessionManager([
+  new CodexAgentProvider(processManager),
+]);
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -30,7 +37,10 @@ function createWindow(): BrowserWindow {
     const allowed = process.env.VITE_DEV_SERVER_URL;
     if (!allowed || !url.startsWith(allowed)) event.preventDefault();
   });
-  window.webContents.on("destroyed", () => ptyManager.terminateForOwner(window.webContents));
+  window.webContents.on("destroyed", () => {
+    ptyManager.terminateForOwner(window.webContents);
+    agentSessionManager.terminateForOwner(window.webContents);
+  });
 
   if (process.env.VITE_DEV_SERVER_URL) {
     void window.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -41,7 +51,7 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
-  registerIpc(ptyManager);
+  registerIpc(ptyManager, agentSessionManager);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -52,4 +62,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => ptyManager.terminateAll());
+app.on("before-quit", () => {
+  agentSessionManager.terminateAll();
+  ptyManager.terminateAll();
+  processManager.terminateAll();
+});

@@ -4,18 +4,18 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import type { ViewComponentProps } from "../../core/view-registry";
 import { services } from "../../core/services";
-import type { SessionController } from "../../core/session-provider-registry";
+import type { TerminalSessionController } from "../../core/session-provider-registry";
 import { TerminalIcon } from "../../ui/icons";
 
 export function TerminalView({ workspace }: ViewComponentProps) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const controllerRef = useRef<SessionController | undefined>(undefined);
+  const controllerRef = useRef<TerminalSessionController | undefined>(undefined);
   const [status, setStatus] = useState("Starting…");
 
   useEffect(() => {
     const host = hostRef.current;
     const provider = services.sessions.get("terminal.local");
-    if (!host || !provider) return;
+    if (!host || provider?.kind !== "terminal") return;
     const styles = getComputedStyle(document.documentElement);
     const token = (name: string) => styles.getPropertyValue(name).trim();
 

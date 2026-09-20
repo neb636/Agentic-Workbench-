@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc";
 import type {
+  AgentSessionCreateOptions,
+  AgentSessionEvent,
   PersistedState,
   PtyCreateOptions,
   PtyDataEvent,
@@ -31,6 +33,19 @@ const api: WorkbenchApi = {
       const wrapped = (_event: Electron.IpcRendererEvent, payload: PtyExitEvent) => listener(payload);
       ipcRenderer.on(IPC.ptyExit, wrapped);
       return () => ipcRenderer.removeListener(IPC.ptyExit, wrapped);
+    },
+  },
+  agent: {
+    create: (options: AgentSessionCreateOptions) =>
+      ipcRenderer.invoke(IPC.agentCreate, options) as Promise<string>,
+    sendPrompt: (sessionId, prompt) =>
+      ipcRenderer.invoke(IPC.agentSendPrompt, { sessionId, prompt }) as Promise<void>,
+    interrupt: (sessionId) => ipcRenderer.send(IPC.agentInterrupt, { sessionId }),
+    terminate: (sessionId) => ipcRenderer.send(IPC.agentTerminate, { sessionId }),
+    onEvent: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: AgentSessionEvent) => listener(payload);
+      ipcRenderer.on(IPC.agentEvent, wrapped);
+      return () => ipcRenderer.removeListener(IPC.agentEvent, wrapped);
     },
   },
 };

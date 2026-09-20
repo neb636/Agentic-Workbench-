@@ -64,6 +64,31 @@ export interface PtyExitEvent {
   exitCode: number;
 }
 
+export type AgentSessionStatus =
+  | "starting"
+  | "ready"
+  | "running"
+  | "interrupted"
+  | "error"
+  | "terminated";
+
+export type AgentOutputKind = "assistant" | "activity";
+
+export interface AgentOutput {
+  kind: AgentOutputKind;
+  text: string;
+}
+
+export interface AgentSessionCreateOptions {
+  providerId: string;
+  workspacePath: string;
+}
+
+export type AgentSessionEvent =
+  | { sessionId: string; type: "status"; status: AgentSessionStatus }
+  | { sessionId: string; type: "output"; output: AgentOutput }
+  | { sessionId: string; type: "error"; message: string };
+
 export interface WorkbenchApi {
   platform: NodeJS.Platform;
   persistence: {
@@ -80,5 +105,12 @@ export interface WorkbenchApi {
     terminate: (sessionId: string) => void;
     onData: (listener: (event: PtyDataEvent) => void) => () => void;
     onExit: (listener: (event: PtyExitEvent) => void) => () => void;
+  };
+  agent: {
+    create: (options: AgentSessionCreateOptions) => Promise<string>;
+    sendPrompt: (sessionId: string, prompt: string) => Promise<void>;
+    interrupt: (sessionId: string) => void;
+    terminate: (sessionId: string) => void;
+    onEvent: (listener: (event: AgentSessionEvent) => void) => () => void;
   };
 }

@@ -2,16 +2,20 @@ import { dialog, ipcMain } from "electron";
 import { basename } from "node:path";
 import { IPC } from "../shared/ipc";
 import {
+  agentPromptSchema,
+  agentSessionActionSchema,
+  agentSessionCreateOptionsSchema,
   persistedStateSchema,
   ptyCreateOptionsSchema,
   ptyInputSchema,
   ptyResizeSchema,
   ptyTerminateSchema,
 } from "../shared/schemas";
+import { AgentSessionManager } from "./agent-session-manager";
 import { loadState, saveState } from "./persistence";
 import { PtyManager } from "./pty-manager";
 
-export function registerIpc(ptyManager: PtyManager): void {
+export function registerIpc(ptyManager: PtyManager, agentSessionManager: AgentSessionManager): void {
   ipcMain.handle(IPC.persistenceLoad, () => loadState());
   ipcMain.handle(IPC.persistenceSave, (_event, input: unknown) =>
     saveState(persistedStateSchema.parse(input)),
@@ -37,6 +41,19 @@ export function registerIpc(ptyManager: PtyManager): void {
   });
   ipcMain.on(IPC.ptyTerminate, (_event, input: unknown) => {
     ptyManager.terminate(ptyTerminateSchema.parse(input).sessionId);
+  });
+  ipcMain.handle(IPC.agentCreate, (event, input: unknown) =>
+    agentSessionManager.create(agentSessionCreateOptionsSchema.parse(input), event.sender),
+  );
+  ipcMain.handle(IPC.agentSendPrompt, (event, input: unknown) => {
+    const parsed = agentPromptSchema.parse(input);
+    agentSessionManager.sendPrompt(parsed.sessionId, parsed.prompt, event.sender);
+  });
+  ipcMain.on(IPC.agentInterrupt, (event, input: unknown) => {
+    agentSessionManager.interrupt(agentSessionActionSchema.parse(input).sessionId, event.sender);
+  });
+  ipcMain.on(IPC.agentTerminate, (event, input: unknown) => {
+    agentSessionManager.terminate(agentSessionActionSchema.parse(input).sessionId, event.sender);
   });
 }
 

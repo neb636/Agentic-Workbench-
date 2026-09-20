@@ -14,9 +14,9 @@
   --wb-accent: #88a7ff;
   --wb-accent-hover: #9db7ff;
   --wb-accent-text: #081126;
-  --wb-success: #76c893;
-  --wb-warning: #e7b66d;
-  --wb-danger: #e37d86;
+  --wb-status-ready: #76c893;
+  --wb-status-warning: #e7b66d;
+  --wb-status-error: #e37d86;
   --wb-sidebar-bg: #0a0c10;
   --wb-terminal-bg: #0a0c10;
   --wb-terminal-fg: #d7dce5;
@@ -116,9 +116,9 @@ button { color: inherit; }
 .view-toolbar-title { display: flex; align-items: center; gap: 7px; color: var(--wb-text-secondary); font-size: 11px; font-weight: 600; }
 .session-status { display: flex; align-items: center; gap: 6px; color: var(--wb-text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--wb-text-muted); }
-.status-running, .status-ready { background: var(--wb-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-success) 13%, transparent); }
-.status-error { background: var(--wb-danger); }
-.status-exited { background: var(--wb-warning); }
+.status-running, .status-ready { background: var(--wb-status-ready); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-status-ready) 13%, transparent); }
+.status-error { background: var(--wb-status-error); }
+.status-exited, .status-interrupted { background: var(--wb-status-warning); }
 
 .terminal-view { display: flex; width: 100%; height: 100%; flex-direction: column; background: var(--wb-terminal-bg); }
 .terminal-host { flex: 1; min-width: 0; min-height: 0; padding: 13px 14px; overflow: hidden; }
@@ -128,6 +128,8 @@ button { color: inherit; }
 .agent-view { display: flex; width: 100%; height: 100%; min-height: 0; flex-direction: column; }
 .agent-display { display: flex; flex: 1; min-height: 190px; flex-direction: column; background: var(--wb-bg-app); }
 .agent-transcript { position: relative; flex: 1; min-height: 0; overflow-y: auto; }
+.agent-toolbar-status { display: flex; align-items: center; gap: 10px; }
+.agent-cancel { min-height: 23px; padding: 2px 8px; font-size: 9px; }
 .agent-empty { position: absolute; top: 46%; left: 50%; width: min(440px, 80%); transform: translate(-50%, -50%); color: var(--wb-text-muted); text-align: center; }
 .agent-empty-icon { display: grid; width: 48px; height: 48px; margin: 0 auto 14px; place-items: center; border: 1px solid var(--wb-border); border-radius: 14px; background: var(--wb-bg-panel); color: var(--wb-accent); }
 .agent-empty h2 { margin: 0 0 7px; color: var(--wb-text-primary); font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
@@ -136,6 +138,14 @@ button { color: inherit; }
 .prompt-message .message-label { color: var(--wb-accent); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .prompt-message p { margin: 7px 0; white-space: pre-wrap; }
 .prompt-message > span { color: var(--wb-text-muted); font-size: 9px; }
+.agent-output { width: min(720px, calc(100% - 48px)); margin: 20px auto; }
+.agent-output .message-label { color: var(--wb-accent); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.agent-output pre { margin: 7px 0 0; color: var(--wb-text-primary); font: inherit; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-output-activity { padding: 10px 12px; border-left: 2px solid var(--wb-border); background: var(--wb-bg-field); }
+.agent-output-activity .message-label { color: var(--wb-text-muted); }
+.agent-output-activity pre { color: var(--wb-text-secondary); font-family: var(--wb-font-mono); font-size: 10px; }
+.agent-output-error { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--wb-status-error) 45%, var(--wb-border)); border-radius: var(--wb-radius-md); background: var(--wb-bg-panel); }
+.agent-output-error .message-label { color: var(--wb-status-error); }
 .agent-composer-row { display: grid; flex: 0 0 270px; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; border-top: 1px solid var(--wb-border); background: var(--wb-bg-panel); }
 .composer-panel { display: flex; min-width: 0; flex-direction: column; margin: 14px; border: 1px solid var(--wb-border); border-radius: var(--wb-radius-lg); background: var(--wb-composer-bg); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--wb-text-primary) 3%, transparent); }
 .composer-panel:focus-within { border-color: color-mix(in srgb, var(--wb-accent) 55%, var(--wb-border)); }
