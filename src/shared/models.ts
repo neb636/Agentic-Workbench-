@@ -64,30 +64,54 @@ export interface PtyExitEvent {
   exitCode: number;
 }
 
-export type AgentSessionStatus =
-  | "starting"
-  | "ready"
-  | "running"
-  | "interrupted"
-  | "error"
-  | "terminated";
+export interface AgentSessionStatus {
+  lifecycle: "starting" | "alive" | "exited" | "failed";
+  activity: "ready" | "working" | "waiting-for-input" | "unknown";
+  canSubmit: boolean;
+  inputState: "empty" | "draft" | "unavailable";
+  reason: string;
+  rule: string;
+  observedAt: number;
+  completed: number;
+  exitCode?: number;
+}
 
-export type AgentOutputKind = "assistant" | "activity";
+export interface AgentProviderInfo {
+  id: string;
+  label: string;
+  available: boolean;
+  reason?: string;
+  resume: boolean;
+}
 
-export interface AgentOutput {
-  kind: AgentOutputKind;
-  text: string;
+export interface AgentViewState {
+  providerId?: string;
+  draft?: string;
+  split?: number;
 }
 
 export interface AgentSessionCreateOptions {
   providerId: string;
   workspacePath: string;
+  viewId: string;
+  cols: number;
+  rows: number;
+  resume?: boolean;
 }
 
-export type AgentSessionEvent =
-  | { sessionId: string; type: "status"; status: AgentSessionStatus }
-  | { sessionId: string; type: "output"; output: AgentOutput }
-  | { sessionId: string; type: "error"; message: string };
+export type AgentSessionEvent = { sessionId: string; sequence: number } & (
+  | { type: "status"; status: AgentSessionStatus }
+  | { type: "data"; data: string }
+);
+
+export interface AgentSessionSnapshot {
+  sessionId: string;
+  sequence: number;
+  screen: string;
+  cols: number;
+  rows: number;
+  status: AgentSessionStatus;
+}
 
 export interface WorkbenchApi {
   platform: NodeJS.Platform;
@@ -107,7 +131,11 @@ export interface WorkbenchApi {
     onExit: (listener: (event: PtyExitEvent) => void) => () => void;
   };
   agent: {
+    providers: () => Promise<AgentProviderInfo[]>;
     create: (options: AgentSessionCreateOptions) => Promise<string>;
+    attach: (sessionId: string) => Promise<AgentSessionSnapshot>;
+    input: (sessionId: string, data: string) => void;
+    resize: (sessionId: string, cols: number, rows: number) => void;
     sendPrompt: (sessionId: string, prompt: string) => Promise<void>;
     interrupt: (sessionId: string) => void;
     terminate: (sessionId: string) => void;

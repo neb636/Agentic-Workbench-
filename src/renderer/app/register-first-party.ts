@@ -1,7 +1,8 @@
 import { services } from "../core/services";
 import { useWorkbenchStore } from "../state/workbench-store";
 import { AgentView } from "../features/agent/AgentView";
-import { codexAgentProvider } from "../features/agent/codex-agent-provider";
+import { cliAgentProvider } from "../features/agent/cli-agent-provider";
+import { closeAgentRuntime } from "../core/agent-runtimes";
 import { TerminalView } from "../features/terminal/TerminalView";
 import { localTerminalProvider } from "../features/terminal/terminal-provider";
 import { PersonaWidget } from "../features/personas/PersonaWidget";
@@ -17,10 +18,10 @@ export function registerFirstPartyContributions(): void {
   services.views.register({
     id: "agent",
     label: "Agent",
-    description: "A prompt-driven agent session with contextual support.",
+    description: "Choose a native coding CLI with a prompt composer.",
     icon: AgentIcon,
     component: AgentView,
-    createState: () => ({ providerId: codexAgentProvider.id }),
+    createState: () => ({}),
   });
   services.views.register({
     id: "terminal",
@@ -31,11 +32,22 @@ export function registerFirstPartyContributions(): void {
     createState: () => ({ providerId: "terminal.local" }),
   });
 
-  services.sessions.register(codexAgentProvider);
+  services.sessions.register(cliAgentProvider("codex.cli", "Codex"));
+  services.sessions.register(cliAgentProvider("claude.cli", "Claude Code"));
   services.sessions.register(localTerminalProvider);
 
   services.widgets.register({ id: "persona", slot: "agent.composer.support", order: 10, component: PersonaWidget });
   services.widgets.register({ id: "appended-instructions", slot: "agent.composer.support", order: 20, component: InstructionsWidget });
+  services.promptContributors.register({ id: "persona", contributions: ({ workspaceId }) => {
+    const state = useWorkbenchStore.getState();
+    const persona = state.personas.find((p) => p.id === state.selectedPersonaByWorkspace[workspaceId]);
+    return persona ? [{ id: persona.id, source: persona.name, kind: "persona", content: persona.instructions, enabled: true }] : [];
+  } });
+  services.promptContributors.register({ id: "instructions", contributions: ({ workspaceId }) =>
+    useWorkbenchStore.getState().appendedInstructions.filter((i) => i.workspaceId === workspaceId).map((i) => ({
+      id: i.id, source: "Appended instructions", kind: "instruction", content: i.content, enabled: i.enabled,
+    })),
+  });
 
   services.commands.register("workspace.add", async () => {
     const path = await window.workbench.workspace.chooseDirectory();
@@ -50,6 +62,7 @@ export function registerFirstPartyContributions(): void {
     return useWorkbenchStore.getState().createView(workspaceId, definition.id, definition.label, definition.createState?.());
   });
   services.commands.register<{ workspaceId: string; viewId: string }>("view.close", ({ workspaceId, viewId }) => {
+    closeAgentRuntime(viewId);
     useWorkbenchStore.getState().closeView(workspaceId, viewId);
   });
 }

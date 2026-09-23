@@ -12,8 +12,10 @@ import type { Workspace } from "../../shared/models";
 import { services } from "../core/services";
 import { useWorkbenchStore } from "../state/workbench-store";
 import { ChevronDownIcon, CloseIcon, PlusIcon } from "../ui/icons";
+import { useAgentRuntimes } from "../core/agent-runtimes";
 
 export function ViewTabs({ workspace }: { workspace: Workspace }) {
+  const runtimes = useAgentRuntimes((s) => s.sessions);
   const selectView = useWorkbenchStore((state) => state.selectView);
   const activeView = workspace.views.find((view) => view.id === workspace.activeViewId);
 
@@ -37,6 +39,8 @@ export function ViewTabs({ workspace }: { workspace: Workspace }) {
                 <Tab id={view.id} className="view-tab">
                   {ViewIcon && <ViewIcon size={14} />}
                   <span>{view.title}</span>
+                  {runtimes[view.id]?.status && <small className="tab-agent-status">{runtimes[view.id].status?.lifecycle !== "alive" ? runtimes[view.id].status?.lifecycle :
+                    runtimes[view.id].status?.activity === "ready" && (runtimes[view.id].status?.completed ?? 0) > (runtimes[view.id].seenCompletion ?? 0) ? "completed" : runtimes[view.id].status?.activity.replaceAll("-", " ")}</small>}
                   <AriaButton
                     className="tab-close"
                     aria-label={`Close ${view.title}`}

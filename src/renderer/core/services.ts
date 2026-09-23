@@ -3,6 +3,7 @@ import { PromptAssembler } from "./prompt-assembler";
 import { SessionProviderRegistry } from "./session-provider-registry";
 import { ViewRegistry } from "./view-registry";
 import { WidgetRegistry } from "./widget-registry";
+import { PromptContributorRegistry } from "./prompt-contributor-registry";
 
 export const services = {
   views: new ViewRegistry(),
@@ -10,4 +11,5 @@ export const services = {
   commands: new CommandRegistry(),
   widgets: new WidgetRegistry(),
   promptAssembler: new PromptAssembler(),
+  promptContributors: new PromptContributorRegistry(),
 };

@@ -62,11 +62,15 @@ export const ptyTerminateSchema = z.object({ sessionId: z.string() });
 export const agentSessionCreateOptionsSchema = z.object({
   providerId: z.string().min(1),
   workspacePath: z.string().min(1),
+  viewId: z.string().min(1),
+  cols: z.number().int().min(2).max(1000),
+  rows: z.number().int().min(1).max(1000),
+  resume: z.boolean().optional(),
 });
 
 export const agentPromptSchema = z.object({
   sessionId: z.string().min(1),
-  prompt: z.string().trim().min(1).max(500_000),
+  prompt: z.string().min(1).max(500_000),
 });
 
 export const agentSessionActionSchema = z.object({ sessionId: z.string().min(1) });

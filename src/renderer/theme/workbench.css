@@ -121,7 +121,7 @@ button { color: inherit; }
 .status-exited, .status-interrupted { background: var(--wb-status-warning); }
 
 .terminal-view { display: flex; width: 100%; height: 100%; flex-direction: column; background: var(--wb-terminal-bg); }
-.terminal-host { flex: 1; min-width: 0; min-height: 0; padding: 13px 14px; overflow: hidden; }
+.terminal-host { flex: 1; min-width: 0; min-height: 0; margin: 10px 12px; overflow: hidden; }
 .terminal-host .xterm { height: 100%; }
 .terminal-host .xterm-viewport { scrollbar-color: var(--wb-border) transparent; }
 
@@ -208,3 +208,28 @@ button { color: inherit; }
   .agent-composer-row { grid-template-columns: minmax(0, 1fr) 270px; }
   .workspace-heading span { display: none; }
 }
+
+.harness-launcher { display: grid; height: 100%; padding: 24px; place-items: center; overflow: auto; }
+.harness-card { width: min(720px, 100%); padding: 30px; border: 1px solid var(--wb-border); border-radius: var(--wb-radius-lg); background: var(--wb-bg-panel); }
+.harness-card > svg { color: var(--wb-accent); }
+.harness-card h2 { margin: 12px 0 6px; font-size: 23px; letter-spacing: -.025em; }
+.harness-card p { color: var(--wb-text-muted); }
+.harness-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 25px 0; }
+.harness-option { display: flex; flex-direction: column; gap: 8px; min-height: 100px; padding: 18px; border: 1px solid var(--wb-border); border-radius: var(--wb-radius-md); background: var(--wb-bg-field); outline: none; }
+.harness-option span { font-size: 11px; color: var(--wb-text-muted); }
+.harness-option[data-selected] { border-color: var(--wb-accent); background: var(--wb-bg-selected); }
+.harness-option[data-focus-visible] { outline: 2px solid var(--wb-accent); outline-offset: 3px; }
+.harness-option[data-disabled] { opacity: .55; }
+.harness-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.native-agent-view .agent-display { min-height: 0; background: var(--wb-terminal-bg); }
+.native-agent-view .agent-composer-row { flex: 1; overflow: hidden; grid-template-rows: minmax(0, 1fr); }
+.native-agent-view .composer-panel { min-height: 0; }
+.native-agent-view .composer-panel textarea { min-height: 40px; flex-basis: 0; }
+.composer-feedback { padding: 0 14px; color: var(--wb-text-muted); font-size: 11px; overflow-wrap: anywhere; }
+.agent-error { color: var(--wb-status-error); }
+.terminal-split { display: grid; flex: 0 0 12px; place-items: center; background: var(--wb-bg-panel); outline: none; }
+.terminal-split span { width: 40px; height: 3px; border-radius: 3px; background: var(--wb-border); }
+.terminal-split:focus-visible span, .terminal-split[data-resize-handle-state="drag"] span { background: var(--wb-accent); }
+.tab-agent-status { font-size: 9px; color: var(--wb-text-muted); }
+.status-working { background: var(--wb-accent); }
+.status-waiting-for-input { background: var(--wb-status-warning); }

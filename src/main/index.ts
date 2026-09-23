@@ -2,14 +2,16 @@ import { app, BrowserWindow, shell } from "electron";
 import path from "node:path";
 import { AgentSessionManager } from "./agent-session-manager";
 import { registerIpc } from "./ipc";
-import { ProcessManager } from "./process-manager";
+import { ClaudeAgentProvider } from "./providers/claude-agent-provider";
 import { CodexAgentProvider } from "./providers/codex-agent-provider";
 import { PtyManager } from "./pty-manager";
 
+if (process.env.WORKBENCH_USER_DATA_DIR) app.setPath("userData", process.env.WORKBENCH_USER_DATA_DIR);
+
 const ptyManager = new PtyManager();
-const processManager = new ProcessManager();
 const agentSessionManager = new AgentSessionManager([
-  new CodexAgentProvider(processManager),
+  new CodexAgentProvider(),
+  new ClaudeAgentProvider(),
 ]);
 
 function createWindow(): BrowserWindow {
@@ -65,5 +67,4 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   agentSessionManager.terminateAll();
   ptyManager.terminateAll();
-  processManager.terminateAll();
 });

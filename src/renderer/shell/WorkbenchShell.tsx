@@ -36,7 +36,7 @@ export function WorkbenchShell() {
             <ViewTabs workspace={activeWorkspace} />
             <div className="active-view-region">
               {activeView && definition ? (
-                <definition.component view={activeView} workspace={activeWorkspace} />
+                <definition.component key={activeView.id} view={activeView} workspace={activeWorkspace} />
               ) : activeView ? (
                 <div className="missing-view"><h2>View unavailable</h2><p>No view is registered for <code>{activeView.type}</code>.</p></div>
               ) : (
