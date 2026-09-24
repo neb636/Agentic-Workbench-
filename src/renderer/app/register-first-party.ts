@@ -7,6 +7,7 @@ import { TerminalView } from "../features/terminal/TerminalView";
 import { localTerminalProvider } from "../features/terminal/terminal-provider";
 import { PersonaWidget } from "../features/personas/PersonaWidget";
 import { InstructionsWidget } from "../features/instructions/InstructionsWidget";
+import { clearComposerRuntime, registerComposerContributions } from "../features/agent/composer-state";
 import { AgentIcon, TerminalIcon } from "../ui/icons";
 
 let registered = false;
@@ -48,6 +49,7 @@ export function registerFirstPartyContributions(): void {
       id: i.id, source: "Appended instructions", kind: "instruction", content: i.content, enabled: i.enabled,
     })),
   });
+  registerComposerContributions();
 
   services.commands.register("workspace.add", async () => {
     const path = await window.workbench.workspace.chooseDirectory();
@@ -63,6 +65,7 @@ export function registerFirstPartyContributions(): void {
   });
   services.commands.register<{ workspaceId: string; viewId: string }>("view.close", ({ workspaceId, viewId }) => {
     closeAgentRuntime(viewId);
+    clearComposerRuntime(viewId);
     useWorkbenchStore.getState().closeView(workspaceId, viewId);
   });
 }

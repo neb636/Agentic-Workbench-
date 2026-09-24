@@ -5,6 +5,11 @@ import { join } from "node:path";
 import assert from "node:assert/strict";
 import { setTimeout } from "node:timers";
 
+if (process.argv.includes("--plan")) {
+  await import("./qa-native-planning.mjs");
+  process.exit(0);
+}
+
 // QA inventory: picker, native startup, split, draft, tab switch, resume,
 // close/exit, missing executable, and minimum window layout. Isolated app data.
 const directory = await mkdtemp(join(tmpdir(), "workbench-cli-qa-"));

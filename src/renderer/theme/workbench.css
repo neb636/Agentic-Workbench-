@@ -226,6 +226,34 @@ button { color: inherit; }
 .native-agent-view .composer-panel { min-height: 0; }
 .native-agent-view .composer-panel textarea { min-height: 40px; flex-basis: 0; }
 .composer-feedback { padding: 0 14px; color: var(--wb-text-muted); font-size: 11px; overflow-wrap: anywhere; }
+.composer-tools, .composer-handoff { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px 0; }
+.composer-tools .wb-button, .composer-handoff .wb-button { font-size: 11px; padding: 4px 8px; }
+.composer-send-options { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.composer-actions { gap: 8px; flex-shrink: 0; }
+.composer-send { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.composer-plan-note, .composer-note { color: var(--wb-text-muted); font-size: 11px; line-height: 1.4; }
+.composer-plan-note { margin: 0; padding: 0 14px 10px; }
+.composer-quotations { min-height: 48px; max-height: 100px; flex-shrink: 1; overflow: auto; padding: 6px 10px 0; }
+.composer-quotation { display: flex; align-items: start; gap: 6px; margin-bottom: 4px; }
+.composer-quotation details { min-width: 0; flex: 1; border: 1px solid var(--wb-border); border-radius: var(--wb-radius-sm); background: var(--wb-bg-panel); }
+.composer-quotation summary { cursor: pointer; padding: 5px 8px; color: var(--wb-text-secondary); font-size: 11px; }
+.composer-quotation pre { margin: 0; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
+.composer-history { display: flex; width: min(480px, calc(100vw - 40px)); max-width: 480px; max-height: min(560px, calc(100vh - 80px)); overflow: hidden; padding: 14px; }
+.composer-history [role="dialog"] { display: flex; flex-direction: column; min-height: 0; width: 100%; outline: none; }
+.composer-history [role="dialog"] > .wb-button { align-self: start; flex-shrink: 0; }
+.composer-history .composer-note { flex-shrink: 0; margin: 8px 0; }
+.composer-history h3 { margin: 0; }
+.composer-history .react-aria-ListBox { min-height: 56px; max-height: 160px; overflow: auto; }
+.composer-history .react-aria-ListBoxItem { display: flex; flex-direction: column; align-items: stretch; gap: 3px; }
+.composer-history .react-aria-ListBoxItem span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.composer-history small { color: var(--wb-text-muted); font-size: 10px; }
+.prompt-preview-text { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--wb-font-mono); font-size: 12px; line-height: 1.55; background: var(--wb-bg-app); padding: 14px; border: 1px solid var(--wb-border); border-radius: var(--wb-radius-sm); }
+.composer-history .prompt-preview-text { flex: 1 1 auto; min-height: 32px; max-height: 160px; overflow: auto; margin: 8px 0; }
+.composer-preview-modal { width: min(720px, calc(100vw - 40px)); }
+.composer-preview-body { padding: 16px; overflow: auto; max-height: calc(100vh - 180px); }
+.prompt-sources { display: flex; gap: 6px; flex-wrap: wrap; }
+.prompt-sources span { border: 1px solid var(--wb-border); border-radius: var(--wb-radius-sm); padding: 3px 7px; color: var(--wb-text-secondary); font-size: 11px; }
+.native-agent-view .composer-panel textarea { min-height: 64px; }
 .agent-error { color: var(--wb-status-error); }
 .terminal-split { display: grid; flex: 0 0 12px; place-items: center; background: var(--wb-bg-panel); outline: none; }
 .terminal-split span { width: 40px; height: 3px; border-radius: 3px; background: var(--wb-border); }

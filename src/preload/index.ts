@@ -42,8 +42,8 @@ const api: WorkbenchApi = {
     resize: (sessionId, cols, rows) => ipcRenderer.send(IPC.agentResize, { sessionId, cols, rows }),
     create: (options: AgentSessionCreateOptions) =>
       ipcRenderer.invoke(IPC.agentCreate, options) as Promise<string>,
-    sendPrompt: (sessionId, prompt) =>
-      ipcRenderer.invoke(IPC.agentSendPrompt, { sessionId, prompt }) as Promise<void>,
+    sendPrompt: (sessionId, request) =>
+      ipcRenderer.invoke(IPC.agentSendPrompt, { sessionId, ...request }),
     interrupt: (sessionId) => ipcRenderer.send(IPC.agentInterrupt, { sessionId }),
     terminate: (sessionId) => ipcRenderer.send(IPC.agentTerminate, { sessionId }),
     onEvent: (listener) => {

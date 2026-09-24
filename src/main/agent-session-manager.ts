@@ -6,9 +6,9 @@ import type { WebContents } from "electron";
 import { Terminal } from "@xterm/headless";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import type { IPty } from "node-pty";
-import type { AgentProviderInfo, AgentSessionCreateOptions, AgentSessionEvent, AgentSessionSnapshot, AgentSessionStatus } from "../shared/models";
+import type { AgentDeliveryResult, AgentPromptRequest, AgentProviderInfo, AgentSessionCreateOptions, AgentSessionEvent, AgentSessionSnapshot, AgentSessionStatus } from "../shared/models";
 import { IPC } from "../shared/ipc";
-import type { AgentProviderAdapter } from "./agent-provider";
+import type { AgentProviderAdapter, ScreenObservation } from "./agent-provider";
 import { spawnTerminal } from "./pty-manager";
 
 interface Session {
@@ -39,7 +39,7 @@ export class AgentSessionManager {
   constructor(private readonly providers: AgentProviderAdapter[], private readonly spawn = spawnTerminal) {}
 
   discover(): AgentProviderInfo[] {
-    return this.providers.map((provider) => ({ id: provider.id, label: provider.label, available: Boolean(executablePath(provider.executable)), resume: true,
+    return this.providers.map((provider) => ({ id: provider.id, label: provider.label, capabilities: provider.capabilities, available: Boolean(executablePath(provider.executable)), resume: true,
       reason: executablePath(provider.executable) ? undefined : `Install ${provider.label}, or configure its WORKBENCH executable path before starting the app.` }));
   }
 
@@ -84,26 +84,52 @@ export class AgentSessionManager {
     return { sessionId: id, sequence: s.sequence, screen: s.serialize.serialize(), cols: s.terminal.cols, rows: s.terminal.rows, status: s.status };
   }
 
-  async sendPrompt(id: string, prompt: string, owner: WebContents): Promise<void> {
+  async sendPrompt(id: string, request: AgentPromptRequest, owner: WebContents): Promise<AgentDeliveryResult> {
     const s = this.owned(id, owner);
-    if (s.sending) throw new Error("A prompt is already being delivered.");
-    const paste = s.provider.submit(prompt);
+    if (s.sending) return { outcome: "not-sent", stage: "none", message: "A prompt is already being delivered." };
+    if (request.intent === "plan" && !s.provider.capabilities?.planning) {
+      return { outcome: "not-sent", stage: "none", message: "This provider does not support planning submissions." };
+    }
+    let stage: AgentDeliveryResult["stage"] = "none";
     s.sending = true;
     try {
+      const submission = s.provider.submit(request);
       await this.flush(s);
       this.detect(s);
       if (!s.status.canSubmit || s.disposed) throw new Error(s.status.reason);
-      s.process.write(paste);
+      if (request.intent === "plan" && s.status.activity !== "ready") throw new Error("Wait until the CLI is ready before sending for planning.");
+      if (submission.prefix) {
+        stage = "prefix";
+        s.process.write(submission.prefix.input);
+        // Native CLIs may classify a command combined with a paste as ordinary text.
+        // Wait for the adapter to recognize the command in the editor before pasting.
+        const deadline = Date.now() + 2000;
+        let acknowledged = false;
+        do {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          await this.flush(s);
+          if (s.status.lifecycle !== "alive" || s.status.activity !== "ready" || !s.terminal.modes.bracketedPasteMode) break;
+          acknowledged = submission.prefix.acknowledged(this.observe(s));
+          if (acknowledged) break;
+        } while (Date.now() < deadline);
+        if (!acknowledged) throw new Error("Planning command could not be confirmed in the native editor. Inspect the terminal before retrying.");
+      }
+      stage = "paste";
+      s.process.write(submission.paste);
       // Wait for the native input editor to acknowledge a draft, not just a delay.
+      // A command prefix is already a draft; it must change after the paste.
+      const hasPastedDraft = () => s.status.inputState === "draft" && !submission.prefix?.acknowledged(this.observe(s));
       const deadline = Date.now() + 2000;
       do {
         await new Promise((resolve) => setTimeout(resolve, 50));
         await this.flush(s);
-        if (s.status.inputState === "draft" || s.status.activity === "waiting-for-input" || s.status.lifecycle !== "alive") break;
+        if (hasPastedDraft() || s.status.activity === "waiting-for-input" || s.status.lifecycle !== "alive") break;
       } while (Date.now() < deadline);
-      if (s.disposed || s.status.lifecycle !== "alive" || s.status.inputState !== "draft") {
+      if (s.disposed || s.status.lifecycle !== "alive" || s.status.activity === "waiting-for-input" || !hasPastedDraft()) {
         throw new Error("Prompt may be pasted. Inspect the terminal before sending again.");
       }
+      if (request.intent === "plan" && s.status.activity !== "ready") throw new Error("CLI activity changed while pasting. Inspect the terminal before sending for planning.");
+      stage = "enter";
       s.process.write("\r");
       s.inputWasEdited = false;
       s.interrupted = false;
@@ -112,10 +138,16 @@ export class AgentSessionManager {
         await new Promise((resolve) => setTimeout(resolve, 50));
         await this.flush(s);
         const current = this.sessions.get(id)?.status;
-        if (current?.inputState === "empty") return;
+        if (current?.lifecycle === "alive" && current.activity !== "waiting-for-input" && current.inputState === "empty") {
+          return { outcome: "submitted", stage, message: request.intent === "plan"
+            ? "Planning request handed to the CLI. Its Plan mode may remain active."
+            : "Prompt handed to the CLI." };
+        }
         if (current?.lifecycle !== "alive" || current.activity === "waiting-for-input") break;
       } while (Date.now() < submittedDeadline);
       throw new Error("Enter was delivered, but submission could not be confirmed. Inspect the terminal before retrying.");
+    } catch (error) {
+      return { outcome: stage === "none" ? "not-sent" : "uncertain", stage, message: error instanceof Error ? error.message : String(error) };
     } finally { s.sending = false; }
   }
 
@@ -160,12 +192,7 @@ export class AgentSessionManager {
   }
   private detect(s: Session): void {
     if (s.disposed || s.status.lifecycle === "exited" || s.status.lifecycle === "failed") return;
-    const buffer = s.terminal.buffer.active;
-    const lines = Array.from({ length: s.terminal.rows }, (_, i) => buffer.getLine(buffer.baseY + i)?.translateToString(true) ?? "");
-    const detection = s.provider.detect({ lines, cursorLine: lines[buffer.cursorY] ?? "", cursorX: buffer.cursorX, cursorY: buffer.cursorY,
-      cursorCellDim: Boolean(buffer.getLine(buffer.baseY + buffer.cursorY)?.getCell(buffer.cursorX)?.isDim()),
-      inputWasEdited: s.inputWasEdited,
-      bracketedPaste: s.terminal.modes.bracketedPasteMode });
+    const detection = s.provider.detect(this.observe(s));
     if (detection.inputState === "empty") s.inputWasEdited = false;
     let completed = s.status.completed;
     if (detection.activity === "working") s.working = true;
@@ -177,6 +204,13 @@ export class AgentSessionManager {
     const previous = s.status;
     s.status = next;
     if (previous.activity !== next.activity || previous.canSubmit !== next.canSubmit || previous.lifecycle !== next.lifecycle || previous.rule !== next.rule || previous.completed !== completed) this.emit(s, { type: "status", status: next });
+  }
+  private observe(s: Session): ScreenObservation {
+    const buffer = s.terminal.buffer.active;
+    const lines = Array.from({ length: s.terminal.rows }, (_, i) => buffer.getLine(buffer.baseY + i)?.translateToString(true) ?? "");
+    return { lines, cursorLine: lines[buffer.cursorY] ?? "", cursorX: buffer.cursorX, cursorY: buffer.cursorY,
+      cursorCellDim: Boolean(buffer.getLine(buffer.baseY + buffer.cursorY)?.getCell(buffer.cursorX)?.isDim()),
+      inputWasEdited: s.inputWasEdited, bracketedPaste: s.terminal.modes.bracketedPasteMode };
   }
   private emit(s: Session, event: { type: "data"; data: string } | { type: "status"; status: AgentSessionStatus }): void {
     const payload: AgentSessionEvent = { ...event, sessionId: s.id, sequence: ++s.sequence };

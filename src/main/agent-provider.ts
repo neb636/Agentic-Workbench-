@@ -1,4 +1,4 @@
-import type { AgentSessionStatus } from "../shared/models";
+import type { AgentPromptRequest, AgentSessionStatus } from "../shared/models";
 
 export interface ScreenObservation {
   lines: string[];
@@ -11,6 +11,11 @@ export interface ScreenObservation {
 }
 export type AgentDetection = Pick<AgentSessionStatus, "activity" | "canSubmit" | "inputState" | "reason" | "rule">;
 
+export interface AgentSubmission {
+  paste: string;
+  prefix?: { input: string; acknowledged: (screen: ScreenObservation) => boolean };
+}
+
 /** Executable, native UI and key protocol knowledge belongs to an adapter. */
 export interface AgentProviderAdapter {
   id: string;
@@ -18,6 +23,7 @@ export interface AgentProviderAdapter {
   executable: string;
   args: (resume: boolean) => string[];
   detect: (screen: ScreenObservation) => AgentDetection;
-  submit: (prompt: string) => string;
+  capabilities?: { planning: boolean };
+  submit: (request: AgentPromptRequest) => AgentSubmission;
   interrupt: string;
 }

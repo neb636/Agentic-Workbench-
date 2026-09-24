@@ -1,5 +1,5 @@
 import { Registry } from "./registry";
-import type { AgentSessionStatus, AgentSessionSnapshot } from "../../shared/models";
+import type { AgentDeliveryResult, AgentPromptRequest, AgentSessionStatus, AgentSessionSnapshot } from "../../shared/models";
 
 export interface SessionCreateContext {
   workspacePath: string;
@@ -25,7 +25,7 @@ export interface AgentSessionController extends SessionController {
   input: (data: string) => void;
   resize: (cols: number, rows: number) => void;
   attach: (snapshot: (snapshot: AgentSessionSnapshot) => void, data: (data: string) => void, error: (message: string) => void) => () => void;
-  sendPrompt: (prompt: string) => Promise<void>;
+  sendPrompt: (request: AgentPromptRequest) => Promise<AgentDeliveryResult>;
   interrupt: () => void;
   onStatus: (listener: (status: AgentSessionStatus) => void) => () => void;
   terminate: () => void;

@@ -25,7 +25,7 @@ export function cliAgentProvider(id: string, label: string): AgentProvider {
       id: sessionId,
       input: (data) => window.workbench.agent.input(sessionId, data),
       resize: (cols, rows) => window.workbench.agent.resize(sessionId, cols, rows),
-      sendPrompt: (prompt) => window.workbench.agent.sendPrompt(sessionId, prompt),
+      sendPrompt: (request) => window.workbench.agent.sendPrompt(sessionId, request),
       interrupt: () => window.workbench.agent.interrupt(sessionId),
       onStatus: (listener) => { listeners.add(listener); if (status) listener(status); return () => { listeners.delete(listener); }; },
       attach: (onSnapshot, onData, onError) => {

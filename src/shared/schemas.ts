@@ -71,6 +71,7 @@ export const agentSessionCreateOptionsSchema = z.object({
 export const agentPromptSchema = z.object({
   sessionId: z.string().min(1),
   prompt: z.string().min(1).max(500_000),
+  intent: z.enum(["default", "plan"]),
 });
 
 export const agentSessionActionSchema = z.object({ sessionId: z.string().min(1) });

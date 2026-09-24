@@ -82,12 +82,32 @@ export interface AgentProviderInfo {
   available: boolean;
   reason?: string;
   resume: boolean;
+  capabilities?: { planning: boolean };
+}
+
+export interface AgentPromptRequest {
+  prompt: string;
+  intent: "default" | "plan";
+}
+
+export interface AgentDeliveryResult {
+  outcome: "submitted" | "not-sent" | "uncertain";
+  stage: "none" | "prefix" | "paste" | "enter" | "unknown";
+  message: string;
+}
+
+export interface PromptQuotation {
+  id: string;
+  content: string;
 }
 
 export interface AgentViewState {
   providerId?: string;
   draft?: string;
   split?: number;
+  quotations?: PromptQuotation[];
+  intent?: AgentPromptRequest["intent"];
+  composerRevision?: number;
 }
 
 export interface AgentSessionCreateOptions {
@@ -136,7 +156,7 @@ export interface WorkbenchApi {
     attach: (sessionId: string) => Promise<AgentSessionSnapshot>;
     input: (sessionId: string, data: string) => void;
     resize: (sessionId: string, cols: number, rows: number) => void;
-    sendPrompt: (sessionId: string, prompt: string) => Promise<void>;
+    sendPrompt: (sessionId: string, request: AgentPromptRequest) => Promise<AgentDeliveryResult>;
     interrupt: (sessionId: string) => void;
     terminate: (sessionId: string) => void;
     onEvent: (listener: (event: AgentSessionEvent) => void) => () => void;

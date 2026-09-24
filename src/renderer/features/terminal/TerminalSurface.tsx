@@ -1,11 +1,21 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import type { AgentSessionController, TerminalSessionController } from "../../core/session-provider-registry";
 
-export function TerminalSurface({ controller }: { controller: AgentSessionController | TerminalSessionController }) {
+export interface TerminalSurfaceHandle { focus: () => void; }
+
+export function TerminalSurface({ controller, ref, onSelectionChange }: {
+  controller: AgentSessionController | TerminalSessionController;
+  ref?: Ref<TerminalSurfaceHandle>;
+  onSelectionChange?: (text: string) => void;
+}) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const selectionCallback = useRef(onSelectionChange);
+  useEffect(() => { selectionCallback.current = onSelectionChange; }, [onSelectionChange]);
+  useImperativeHandle(ref, () => ({ focus: () => terminalRef.current?.focus() }), []);
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -20,6 +30,8 @@ export function TerminalSurface({ controller }: { controller: AgentSessionContro
       },
     });
     const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open(host);
+    terminalRef.current = terminal;
+    const selection = terminal.onSelectionChange(() => selectionCallback.current?.(terminal.getSelection()));
     let active = true;
     let attached = false;
     let followOutput = true;
@@ -57,6 +69,7 @@ export function TerminalSurface({ controller }: { controller: AgentSessionContro
     const observer = new ResizeObserver(resize); observer.observe(host);
     return () => {
       active = false; observer.disconnect(); detach?.(); offExit?.(); input.dispose(); scroll.dispose();
+      selection.dispose(); terminalRef.current = null;
       host.removeEventListener("wheel", wheel); host.removeEventListener("pointerdown", pointer); terminal.dispose();
     };
   }, [controller]);
