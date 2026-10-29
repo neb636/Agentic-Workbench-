@@ -16,8 +16,9 @@
     "start": "electron .",
     "qa:composer": "node scripts/qa-composer.mjs",
     "postinstall": "electron-rebuild -f -w node-pty",
-    "dist": "npm run build && electron-builder --mac",
-    "dist:dir": "npm run build && electron-builder --mac --dir"
+    "dist": "npm run build && electron-builder --mac && npm run open:app",
+    "dist:dir": "npm run build && electron-builder --mac --dir && npm run open:app",
+    "open:app": "open \"release/mac-arm64/Agent Workbench.app\""
   },
   "dependencies": {
     "@codemirror/language": "^6.13.1",
