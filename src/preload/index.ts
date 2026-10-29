@@ -3,6 +3,7 @@ import { IPC } from "../shared/ipc";
 import type {
   AgentSessionCreateOptions,
   AgentSessionEvent,
+  FilesChangedEvent,
   PersistedState,
   PtyCreateOptions,
   PtyDataEvent,
@@ -18,6 +19,27 @@ const api: WorkbenchApi = {
   },
   workspace: {
     chooseDirectory: () => ipcRenderer.invoke(IPC.workspaceChooseDirectory) as Promise<string | null>,
+  },
+  app: {
+    metrics: () => ipcRenderer.invoke(IPC.appMetrics),
+  },
+  files: {
+    list: (root, path) => ipcRenderer.invoke(IPC.filesList, { root, path }),
+    read: (root, path) => ipcRenderer.invoke(IPC.filesRead, { root, path }),
+    find: (root, query) => ipcRenderer.invoke(IPC.filesFind, { root, query }),
+    watch: (root) => ipcRenderer.send(IPC.filesWatch, { root }),
+    unwatch: (root) => ipcRenderer.send(IPC.filesUnwatch, { root }),
+    onChanged: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: FilesChangedEvent) => listener(payload);
+      ipcRenderer.on(IPC.filesChanged, wrapped);
+      return () => ipcRenderer.removeListener(IPC.filesChanged, wrapped);
+    },
+  },
+  sourceControl: {
+    detect: (root) => ipcRenderer.invoke(IPC.sourceControlDetect, { root }),
+    status: (root) => ipcRenderer.invoke(IPC.sourceControlStatus, { root }),
+    commit: (root, message) => ipcRenderer.invoke(IPC.sourceControlCommit, { root, message }),
+    createWorktree: (root, branch) => ipcRenderer.invoke(IPC.sourceControlCreateWorktree, { root, branch }),
   },
   pty: {
     create: (options: PtyCreateOptions) => ipcRenderer.invoke(IPC.ptyCreate, options) as Promise<string>,

@@ -2,7 +2,7 @@ import { app } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { PersistedState } from "../shared/models";
-import { persistedStateSchema } from "../shared/schemas";
+import { migratePersistedState, persistedStateSchema } from "../shared/schemas";
 
 const emptyState: PersistedState = {
   workspaces: [],
@@ -16,8 +16,8 @@ const emptyState: PersistedState = {
       scope: "global",
     },
   ],
-  selectedPersonaByWorkspace: {},
-  appendedInstructions: [],
+  instructionOptions: [],
+  layout: { leftCollapsed: false, rightCollapsed: false },
 };
 
 function statePath() {
@@ -27,7 +27,8 @@ function statePath() {
 export async function loadState(): Promise<PersistedState> {
   try {
     const source = await fs.readFile(statePath(), "utf8");
-    const result = persistedStateSchema.safeParse(JSON.parse(source));
+    const result = persistedStateSchema.safeParse(migratePersistedState(JSON.parse(source)));
+    if (!result.success) console.error("Workbench state did not validate; starting fresh", result.error.issues.slice(0, 5));
     return result.success ? result.data : emptyState;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -37,11 +38,12 @@ export async function loadState(): Promise<PersistedState> {
   }
 }
 
-export async function saveState(input: unknown): Promise<void> {
+export async function saveState(input: unknown): Promise<PersistedState> {
   const state = persistedStateSchema.parse(input);
   const target = statePath();
   const temporary = `${target}.next`;
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(temporary, JSON.stringify(state, null, 2), "utf8");
   await fs.rename(temporary, target);
+  return state;
 }

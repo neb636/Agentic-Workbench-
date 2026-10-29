@@ -1,7 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { accessSync, constants } from "node:fs";
-import { delimiter, isAbsolute, join } from "node:path";
-import { homedir } from "node:os";
 import type { WebContents } from "electron";
 import { Terminal } from "@xterm/headless";
 import { SerializeAddon } from "@xterm/addon-serialize";
@@ -9,6 +6,7 @@ import type { IPty } from "node-pty";
 import type { AgentDeliveryResult, AgentPromptRequest, AgentProviderInfo, AgentSessionCreateOptions, AgentSessionEvent, AgentSessionSnapshot, AgentSessionStatus } from "../shared/models";
 import { IPC } from "../shared/ipc";
 import type { AgentProviderAdapter, ScreenObservation } from "./agent-provider";
+import { executablePath } from "./executables";
 import { spawnTerminal } from "./pty-manager";
 
 interface Session {
@@ -26,12 +24,6 @@ interface Session {
   sending: boolean;
   disposed: boolean;
   inputWasEdited: boolean;
-}
-
-export function executablePath(command: string): string | undefined {
-  const dirs = [...(process.env.PATH ?? "").split(delimiter), join(homedir(), ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin"];
-  const candidates = isAbsolute(command) ? [command] : dirs.filter(Boolean).map((dir) => join(dir, command));
-  return candidates.find((candidate) => { try { accessSync(candidate, constants.X_OK); return true; } catch { return false; } });
 }
 
 export class AgentSessionManager {

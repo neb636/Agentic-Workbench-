@@ -5,10 +5,18 @@ import { cliAgentProvider } from "../features/agent/cli-agent-provider";
 import { closeAgentRuntime } from "../core/agent-runtimes";
 import { TerminalView } from "../features/terminal/TerminalView";
 import { localTerminalProvider } from "../features/terminal/terminal-provider";
-import { PersonaWidget } from "../features/personas/PersonaWidget";
-import { InstructionsWidget } from "../features/instructions/InstructionsWidget";
 import { clearComposerRuntime, registerComposerContributions } from "../features/agent/composer-state";
-import { AgentIcon, TerminalIcon } from "../ui/icons";
+import { agentIdleStatus, publishAgentStatuses } from "../features/agent/session-status";
+import { personaMenu } from "../features/personas/persona-menu";
+import { instructionsMenu } from "../features/instructions/instructions-menu";
+import { FileView } from "../features/files/FileView";
+import { FilesPanel } from "../features/files/FilesPanel";
+import { registerFileCommands } from "../features/files/file-commands";
+import { ActiveViewsPanel } from "../features/views/ActiveViewsPanel";
+import { SourceControlPanel, StatusBranch, WorkspaceBranch } from "../features/source-control/SourceControlPanel";
+import { MemoryUsage, SessionSummary, TerminalCount } from "../features/status/StatusItems";
+import { SettingsButton } from "../features/settings/SettingsButton";
+import { AgentIcon, BranchIcon, FileIcon, FilesIcon, LayersIcon, TerminalIcon } from "../ui/icons";
 
 let registered = false;
 
@@ -18,11 +26,14 @@ export function registerFirstPartyContributions(): void {
 
   services.views.register({
     id: "agent",
-    label: "Agent",
-    description: "Choose a native coding CLI with a prompt composer.",
+    label: "Agent session",
+    description: "A native coding CLI with a prompt composer below it.",
     icon: AgentIcon,
     component: AgentView,
-    createState: () => ({}),
+    defaultTitle: "Untitled",
+    listInSidebar: true,
+    idleStatus: agentIdleStatus,
+    createState: () => ({ autoTitle: true }),
   });
   services.views.register({
     id: "terminal",
@@ -32,25 +43,36 @@ export function registerFirstPartyContributions(): void {
     component: TerminalView,
     createState: () => ({ providerId: "terminal.local" }),
   });
+  services.views.register({
+    id: "file",
+    label: "File",
+    description: "A read-only file from the workspace.",
+    icon: FileIcon,
+    component: FileView,
+    creatable: false,
+  });
 
-  services.sessions.register(cliAgentProvider("codex.cli", "Codex"));
-  services.sessions.register(cliAgentProvider("claude.cli", "Claude Code"));
+  services.sessions.register(cliAgentProvider("claude.cli", "Claude Code", "Anthropic"));
+  services.sessions.register(cliAgentProvider("codex.cli", "Codex", "OpenAI"));
   services.sessions.register(localTerminalProvider);
 
-  services.widgets.register({ id: "persona", slot: "agent.composer.support", order: 10, component: PersonaWidget });
-  services.widgets.register({ id: "appended-instructions", slot: "agent.composer.support", order: 20, component: InstructionsWidget });
-  services.promptContributors.register({ id: "persona", contributions: ({ workspaceId }) => {
-    const state = useWorkbenchStore.getState();
-    const persona = state.personas.find((p) => p.id === state.selectedPersonaByWorkspace[workspaceId]);
-    return persona ? [{ id: persona.id, source: persona.name, kind: "persona", content: persona.instructions, enabled: true }] : [];
-  } });
-  services.promptContributors.register({ id: "instructions", contributions: ({ workspaceId }) =>
-    useWorkbenchStore.getState().appendedInstructions.filter((i) => i.workspaceId === workspaceId).map((i) => ({
-      id: i.id, source: "Appended instructions", kind: "instruction", content: i.content, enabled: i.enabled,
-    })),
-  });
-  registerComposerContributions();
+  services.panels.register({ id: "views", label: "Active views", icon: LayersIcon, order: 10, component: ActiveViewsPanel });
+  services.panels.register({ id: "files", label: "Files", icon: FilesIcon, order: 20, component: FilesPanel });
+  services.panels.register({ id: "source-control", label: "Source control", icon: BranchIcon, order: 30, component: SourceControlPanel });
 
+  services.promptMenus.register(personaMenu);
+  services.promptMenus.register(instructionsMenu);
+  registerComposerContributions();
+  publishAgentStatuses();
+
+  services.widgets.register({ id: "settings", slot: "sidebar.footer", order: 100, component: SettingsButton });
+  services.widgets.register({ id: "workspace-branch", slot: "sidebar.workspace.meta", component: WorkspaceBranch });
+  services.widgets.register({ id: "sessions", slot: "statusbar.start", order: 10, component: SessionSummary });
+  services.widgets.register({ id: "branch", slot: "statusbar.end", order: 10, component: StatusBranch });
+  services.widgets.register({ id: "terminals", slot: "statusbar.end", order: 20, component: TerminalCount });
+  services.widgets.register({ id: "memory", slot: "statusbar.end", order: 30, component: MemoryUsage });
+
+  registerFileCommands();
   services.commands.register("workspace.add", async () => {
     const path = await window.workbench.workspace.chooseDirectory();
     if (path) useWorkbenchStore.getState().addWorkspace(path);
@@ -58,10 +80,18 @@ export function registerFirstPartyContributions(): void {
   services.commands.register<string>("workspace.select", (workspaceId) => {
     useWorkbenchStore.getState().selectWorkspace(workspaceId);
   });
+  services.commands.register<string>("workspace.remove", async (workspaceId) => {
+    const workspace = useWorkbenchStore.getState().workspaces.find((item) => item.id === workspaceId);
+    for (const view of workspace?.views ?? []) await services.commands.execute("view.close", { workspaceId, viewId: view.id });
+    useWorkbenchStore.getState().removeWorkspace(workspaceId);
+  });
   services.commands.register<{ workspaceId: string; viewType: string }>("view.create", ({ workspaceId, viewType }) => {
     const definition = services.views.get(viewType);
     if (!definition) throw new Error(`Unknown view type: ${viewType}`);
-    return useWorkbenchStore.getState().createView(workspaceId, definition.id, definition.label, definition.createState?.());
+    return useWorkbenchStore.getState().createView(workspaceId, definition.id, definition.defaultTitle ?? definition.label, definition.createState?.());
+  });
+  services.commands.register<{ workspaceId: string; viewId: string }>("view.select", ({ workspaceId, viewId }) => {
+    useWorkbenchStore.getState().selectView(workspaceId, viewId);
   });
   services.commands.register<{ workspaceId: string; viewId: string }>("view.close", ({ workspaceId, viewId }) => {
     closeAgentRuntime(viewId);

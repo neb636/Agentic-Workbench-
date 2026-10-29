@@ -1,0 +1,45 @@
+/* Read-only file viewer: a dark code card inside the light chrome. */
+.file-view { display: flex; flex: 1; min-height: 0; }
+.code-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--wb-code-border);
+  border-radius: var(--wb-radius-xl);
+  background: var(--wb-code-bg);
+  box-shadow: var(--wb-shadow-card);
+}
+.code-breadcrumbs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  gap: 12px;
+  height: 36px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--wb-code-border);
+  background: var(--wb-code-chrome);
+  color: var(--wb-code-muted);
+}
+.code-breadcrumbs nav { display: flex; min-width: 0; overflow: hidden; white-space: nowrap; }
+.code-breadcrumbs nav span:not(:last-child)::after { content: "›"; margin: 0 6px; color: var(--wb-code-gutter); }
+.code-breadcrumbs .is-current { color: var(--wb-code-fg); font-weight: 600; }
+.code-badge { flex: none; padding: 2px 7px; border-radius: var(--wb-radius-xs); background: var(--wb-code-border); color: var(--wb-code-muted); font-size: 11px; }
+.code-editor { flex: 1; min-height: 0; overflow: hidden; }
+.code-editor .cm-editor { height: 100%; }
+.code-editor .cm-scroller::-webkit-scrollbar-thumb { background: var(--wb-code-border); }
+.code-message { flex: 1; padding: 20px; color: var(--wb-code-muted); }
+.code-footer {
+  display: flex;
+  justify-content: space-between;
+  flex: none;
+  gap: 12px;
+  height: 28px;
+  padding: 0 14px;
+  align-items: center;
+  border-top: 1px solid var(--wb-code-border);
+  color: var(--wb-code-muted);
+  font-size: 11px;
+}

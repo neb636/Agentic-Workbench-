@@ -42,12 +42,12 @@ try {
   await page.getByRole("textbox", { name: "Prompt", exact: true }).fill("Draft survives a tab switch\nSecond line");
   assert(await page.getByRole("button", { name: "Send prompt", exact: true }).isEnabled());
   await page.screenshot({ path: join(directory, "codex.png") });
-  console.log("CODEX", await page.locator(".session-status").innerText());
+  console.log("CODEX", await page.locator(".session-pill").innerText());
   await page.getByRole("tab", { name: /Claude QA/ }).click();
   await page.getByRole("button", { name: "Start session", exact: true }).click();
   await page.getByRole("textbox", { name: "Prompt", exact: true }).waitFor();
   await page.waitForTimeout(4000);
-  console.log("CLAUDE", await page.locator(".session-status").innerText());
+  console.log("CLAUDE", await page.locator(".session-pill").innerText());
   if (process.env.QA_CLAUDE_SEND) {
     if ((await page.locator(".xterm-rows").innerText()).includes("Yes, I trust this folder")) {
       await page.locator(".xterm-helper-textarea").focus();

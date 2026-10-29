@@ -26,8 +26,9 @@ try {
     await page.waitForTimeout(4000);
     for (let turn = 1; turn <= 2; turn++) {
       const status = await page.locator(".composer-feedback").innerText();
-      if (!await page.getByRole("checkbox", { name: "Plan this prompt" }).isChecked()) {
-        await page.getByText("Plan this prompt", { exact: true }).click();
+      if ((await page.locator(".mode-select button").innerText()).trim() !== "Plan") {
+        await page.locator(".mode-select button").click();
+        await page.getByRole("option", { name: /^Plan/ }).click();
       }
       await page.getByRole("textbox", { name: "Prompt", exact: true }).fill(`Integration check ${turn}.\nAre you in Plan mode? If yes, reply exactly WORKBENCH_PLAN_OK_${turn}. Otherwise reply NOT_IN_PLAN_MODE.`);
       if (!await page.getByRole("button", { name: "Send for planning", exact: true }).isEnabled()) {
@@ -37,7 +38,7 @@ try {
       }
       await page.getByRole("button", { name: "Send for planning", exact: true }).click();
       await page.waitForTimeout(5000);
-      for (let poll = 0; poll < 6 && (await page.locator(".session-status").innerText()).toLowerCase().includes("working"); poll++) await page.waitForTimeout(5000);
+      for (let poll = 0; poll < 6 && (await page.locator(".session-pill").innerText()).toLowerCase().includes("working"); poll++) await page.waitForTimeout(5000);
       const terminal = await page.locator(".xterm-rows").innerText();
       const feedback = await page.locator(".composer-feedback").innerText();
       const draft = await page.getByRole("textbox", { name: "Prompt", exact: true }).inputValue();

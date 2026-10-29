@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import type {
-  AppendedInstruction,
+  LayoutState,
   PersistedState,
   Persona,
+  StoredPromptOption,
   WorkbenchView,
   Workspace,
 } from "../../shared/models";
@@ -12,28 +13,33 @@ interface WorkbenchStore extends PersistedState {
   isHydrated: boolean;
   hydrate: () => Promise<void>;
   addWorkspace: (path: string) => string;
+  removeWorkspace: (workspaceId: string) => void;
   selectWorkspace: (workspaceId: string) => void;
   createView: (workspaceId: string, type: string, title: string, state?: unknown) => string;
   selectView: (workspaceId: string, viewId: string) => void;
   closeView: (workspaceId: string, viewId: string) => void;
+  renameView: (workspaceId: string, viewId: string, title: string) => void;
   updateViewState: (workspaceId: string, viewId: string, patch: Record<string, unknown>) => void;
   upsertPersona: (persona: Persona) => void;
   deletePersona: (personaId: string) => void;
-  selectPersona: (workspaceId: string, personaId?: string) => void;
-  addInstruction: (workspaceId: string, content?: string) => string;
-  updateInstruction: (instructionId: string, patch: Partial<AppendedInstruction>) => void;
-  deleteInstruction: (instructionId: string) => void;
+  upsertInstructionOption: (option: StoredPromptOption) => void;
+  deleteInstructionOption: (optionId: string) => void;
+  updateLayout: (patch: Partial<LayoutState>) => void;
 }
 
 const initialState: PersistedState = {
   workspaces: [],
   personas: [],
-  selectedPersonaByWorkspace: {},
-  appendedInstructions: [],
+  instructionOptions: [],
+  layout: { leftCollapsed: false, rightCollapsed: false },
 };
 
 function workspaceName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+}
+
+function mapWorkspace(workspaces: Workspace[], workspaceId: string, update: (workspace: Workspace) => Workspace): Workspace[] {
+  return workspaces.map((workspace) => (workspace.id === workspaceId ? update(workspace) : workspace));
 }
 
 export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
@@ -54,7 +60,8 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
       id: createId("view"),
       type: "agent",
       workspaceId,
-      title: "New session",
+      title: "Untitled",
+      state: { autoTitle: true },
     };
     const workspace: Workspace = {
       id: workspaceId,
@@ -69,39 +76,41 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
     }));
     return workspaceId;
   },
+  removeWorkspace: (workspaceId) =>
+    set((state) => {
+      const workspaces = state.workspaces.filter((workspace) => workspace.id !== workspaceId);
+      return {
+        workspaces,
+        activeWorkspaceId: state.activeWorkspaceId === workspaceId ? workspaces[0]?.id : state.activeWorkspaceId,
+      };
+    }),
   selectWorkspace: (workspaceId) => set({ activeWorkspaceId: workspaceId }),
   updateViewState: (workspaceId, viewId, patch) => set((state) => ({
-    workspaces: state.workspaces.map((workspace) => workspace.id !== workspaceId ? workspace : {
+    workspaces: mapWorkspace(state.workspaces, workspaceId, (workspace) => ({
       ...workspace, views: workspace.views.map((view) => view.id !== viewId ? view : {
         ...view, state: { ...(typeof view.state === "object" && view.state !== null ? view.state : {}), ...patch },
       }),
-    }),
+    })),
   })),
   createView: (workspaceId, type, title, viewState) => {
     const viewId = createId("view");
     set((state) => ({
-      workspaces: state.workspaces.map((workspace) =>
-        workspace.id === workspaceId
-          ? {
-              ...workspace,
-              views: [...workspace.views, { id: viewId, type, workspaceId, title, state: viewState }],
-              activeViewId: viewId,
-            }
-          : workspace,
-      ),
+      workspaces: mapWorkspace(state.workspaces, workspaceId, (workspace) => ({
+        ...workspace,
+        views: [...workspace.views, { id: viewId, type, workspaceId, title, state: viewState }],
+        activeViewId: viewId,
+      })),
     }));
     return viewId;
   },
   selectView: (workspaceId, viewId) =>
     set((state) => ({
-      workspaces: state.workspaces.map((workspace) =>
-        workspace.id === workspaceId ? { ...workspace, activeViewId: viewId } : workspace,
-      ),
+      activeWorkspaceId: workspaceId,
+      workspaces: mapWorkspace(state.workspaces, workspaceId, (workspace) => ({ ...workspace, activeViewId: viewId })),
     })),
   closeView: (workspaceId, viewId) =>
     set((state) => ({
-      workspaces: state.workspaces.map((workspace) => {
-        if (workspace.id !== workspaceId) return workspace;
+      workspaces: mapWorkspace(state.workspaces, workspaceId, (workspace) => {
         const index = workspace.views.findIndex((view) => view.id === viewId);
         const views = workspace.views.filter((view) => view.id !== viewId);
         const replacement = views[Math.min(Math.max(index, 0), views.length - 1)];
@@ -112,42 +121,31 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
         };
       }),
     })),
+  renameView: (workspaceId, viewId, title) =>
+    set((state) => ({
+      workspaces: mapWorkspace(state.workspaces, workspaceId, (workspace) => ({
+        ...workspace, views: workspace.views.map((view) => (view.id === viewId ? { ...view, title } : view)),
+      })),
+    })),
   upsertPersona: (persona) =>
     set((state) => {
       const exists = state.personas.some((item) => item.id === persona.id);
       return { personas: exists ? state.personas.map((item) => (item.id === persona.id ? persona : item)) : [...state.personas, persona] };
     }),
   deletePersona: (personaId) =>
-    set((state) => ({
-      personas: state.personas.filter((persona) => persona.id !== personaId),
-      selectedPersonaByWorkspace: Object.fromEntries(
-        Object.entries(state.selectedPersonaByWorkspace).map(([workspaceId, selectedId]) => [
-          workspaceId,
-          selectedId === personaId ? undefined : selectedId,
-        ]),
-      ),
-    })),
-  selectPersona: (workspaceId, personaId) =>
-    set((state) => ({
-      selectedPersonaByWorkspace: { ...state.selectedPersonaByWorkspace, [workspaceId]: personaId },
-    })),
-  addInstruction: (workspaceId, content = "") => {
-    const id = createId("instruction");
-    set((state) => ({
-      appendedInstructions: [...state.appendedInstructions, { id, workspaceId, content, enabled: true }],
-    }));
-    return id;
-  },
-  updateInstruction: (instructionId, patch) =>
-    set((state) => ({
-      appendedInstructions: state.appendedInstructions.map((instruction) =>
-        instruction.id === instructionId ? { ...instruction, ...patch } : instruction,
-      ),
-    })),
-  deleteInstruction: (instructionId) =>
-    set((state) => ({
-      appendedInstructions: state.appendedInstructions.filter((instruction) => instruction.id !== instructionId),
-    })),
+    set((state) => ({ personas: state.personas.filter((persona) => persona.id !== personaId) })),
+  upsertInstructionOption: (stored) =>
+    set((state) => {
+      const exists = state.instructionOptions.some((item) => item.option.id === stored.option.id);
+      return {
+        instructionOptions: exists
+          ? state.instructionOptions.map((item) => (item.option.id === stored.option.id ? stored : item))
+          : [...state.instructionOptions, stored],
+      };
+    }),
+  deleteInstructionOption: (optionId) =>
+    set((state) => ({ instructionOptions: state.instructionOptions.filter((item) => item.option.id !== optionId) })),
+  updateLayout: (patch) => set((state) => ({ layout: { ...state.layout, ...patch } })),
 }));
 
 function persistedSnapshot(state: WorkbenchStore): PersistedState {
@@ -155,8 +153,8 @@ function persistedSnapshot(state: WorkbenchStore): PersistedState {
     workspaces: state.workspaces,
     activeWorkspaceId: state.activeWorkspaceId,
     personas: state.personas,
-    selectedPersonaByWorkspace: state.selectedPersonaByWorkspace,
-    appendedInstructions: state.appendedInstructions,
+    instructionOptions: state.instructionOptions,
+    layout: state.layout,
   };
 }
 

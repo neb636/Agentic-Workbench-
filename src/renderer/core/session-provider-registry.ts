@@ -34,6 +34,8 @@ export interface AgentSessionController extends SessionController {
 interface SessionProviderBase {
   id: string;
   label: string;
+  /** Short secondary text, such as the vendor. */
+  description?: string;
 }
 
 export interface TerminalSessionProvider extends SessionProviderBase {

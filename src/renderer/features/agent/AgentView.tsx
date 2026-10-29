@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { Radio, RadioGroup } from "react-aria-components";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import type { AgentProviderInfo, AgentViewState } from "../../../shared/models";
 import { services } from "../../core/services";
-import { acknowledgeAgentCompletion, closeAgentRuntime, startAgentRuntime, useAgentRuntimes } from "../../core/agent-runtimes";
+import { acknowledgeAgentCompletion, startAgentRuntime, useAgentRuntimes } from "../../core/agent-runtimes";
+import { errorMessage } from "../../core/errors";
 import type { ViewComponentProps } from "../../core/view-registry";
 import { useWorkbenchStore } from "../../state/workbench-store";
-import { AgentIcon } from "../../ui/icons";
 import { Button } from "../../ui/controls";
-import { AgentComposer } from "./AgentComposer";
+import { ChevronUpIcon } from "../../ui/icons";
+import { AgentComposer, type ComposerSession } from "./AgentComposer";
+import { prepareSessionFolder } from "./composer-state";
+import { SessionLauncher } from "./SessionLauncher";
+import { agentRuntimeStatus } from "./session-status";
 import { TerminalSurface, type TerminalSurfaceHandle } from "../terminal/TerminalSurface";
 
 export function AgentView({ view, workspace }: ViewComponentProps) {
@@ -24,14 +27,15 @@ export function AgentView({ view, workspace }: ViewComponentProps) {
   const layoutRef = useRef<HTMLElement>(null);
   const [composerMinimum, setComposerMinimum] = useState(40);
   const hasQuotations = Boolean(state.quotations?.length);
+  const live = Boolean(runtime);
   useEffect(() => {
     const element = layoutRef.current;
     if (!element) return;
-    const measure = () => setComposerMinimum(Math.min(75, Math.max(25, (hasQuotations ? 360 : 320) / element.clientHeight * 100)));
+    const measure = () => setComposerMinimum(Math.min(75, Math.max(20, ((live ? 210 : 176) + (hasQuotations ? 48 : 0)) / element.clientHeight * 100)));
     const observer = new ResizeObserver(measure);
     observer.observe(element); measure();
     return () => observer.disconnect();
-  }, [runtime?.controller.id, hasQuotations]);
+  }, [live, hasQuotations, state.composerCollapsed]);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
@@ -46,54 +50,40 @@ export function AgentView({ view, workspace }: ViewComponentProps) {
     const provider = services.sessions.get(selected ?? "");
     if (provider?.kind !== "agent") return;
     setBusy(true); setError(""); patch({ providerId: provider.id });
-    try { await startAgentRuntime(view.id, provider, { workspacePath: workspace.path, resume }); }
-    catch (e) { if (alive.current) setError(String(e)); }
+    try { await startAgentRuntime(view.id, provider, { workspacePath: await prepareSessionFolder({ workspaceId: workspace.id, viewId: view.id }), resume }); }
+    catch (e) { if (alive.current) setError(errorMessage(e)); }
     finally { if (alive.current) setBusy(false); }
   };
-  if (!runtime) return <section className="harness-launcher" aria-label="New agent session">
-    <div className="harness-card">
-      <AgentIcon size={28} /><h2>Choose your coding harness</h2>
-      <p>Your CLI, its native tools and permissions, with a composer alongside it.</p>
-      <RadioGroup aria-label="Coding harness" value={selected ?? ""} onChange={(providerId) => patch({ providerId })} className="harness-options">
-        {providers.filter((p) => services.sessions.get(p.id)?.kind === "agent").map((p) => <Radio key={p.id} value={p.id} isDisabled={!p.available || busy} className="harness-option">
-          <strong>{p.label}</strong><span>{p.available ? "Available locally" : p.reason}</span>
-        </Radio>)}
-      </RadioGroup>
-      {providers.length === 0 && !error && <p>Checking installed harnesses…</p>}
-      {error && <p role="alert" className="agent-error">{error}</p>}
-      <div className="harness-actions">
-        <Button isDisabled={busy || !providers.find((p) => p.id === selected)?.available} onPress={() => void start(true)}>Resume…</Button>
-        <Button className="primary-button" isDisabled={busy || !providers.find((p) => p.id === selected)?.available} onPress={() => void start()}>{busy ? "Starting…" : "Start session"}</Button>
-      </div>
+  const session: ComposerSession | undefined = runtime && {
+    status: runtime.status,
+    display: agentRuntimeStatus(runtime),
+    planning: Boolean(providers.find((p) => p.id === runtime.providerId)?.capabilities?.planning),
+    selection,
+    interrupt: () => runtime.controller.interrupt(),
+    focusTerminal: () => terminalRef.current?.focus(),
+  };
+  const top = runtime
+    ? <div className="terminal-card"><TerminalSurface controller={runtime.controller} ref={terminalRef} onSelectionChange={setSelection} /></div>
+    : <SessionLauncher workspace={workspace} state={state} providers={providers} selected={selected} busy={busy} error={error}
+        onChange={patch} onStart={(resume) => void start(resume)} />;
+  const composer = <AgentComposer key={runtime?.controller.id ?? "setup"} workspaceId={workspace.id} viewId={view.id} agentLabel={services.sessions.get(runtime?.providerId ?? selected ?? "")?.label ?? "the agent"}
+    state={{ ...state, providerId: selected }} session={session} canLaunch={Boolean(providers.find((p) => p.id === selected)?.available)}
+    onCollapse={() => patch({ composerCollapsed: true })} />;
+
+  if (state.composerCollapsed) return <section className="agent-view is-composer-collapsed" aria-label="Agent session">
+    <div className="agent-display">{top}</div>
+    <div className="composer-collapsed">
+      {session && <span className={`session-pill tone-${session.display.tone}`}><span className="status-dot" />{session.display.label}</span>}
+      <Button className="strip-button" onPress={() => patch({ composerCollapsed: false })}><ChevronUpIcon size={13} />Show composer</Button>
     </div>
   </section>;
-  const status = runtime.status;
-  const ended = status?.lifecycle === "exited" || status?.lifecycle === "failed";
-  const label = status?.lifecycle === "alive" ? status.activity.replaceAll("-", " ") : status?.lifecycle ?? "starting";
-  const split = Math.min(100 - composerMinimum, Math.max(25, typeof state.split === "number" ? state.split : 50));
-  return <section ref={layoutRef} className="agent-view native-agent-view" aria-label="Agent session">
+
+  const split = Math.min(100 - composerMinimum, Math.max(25, typeof state.split === "number" ? state.split : 62));
+  return <section ref={layoutRef} className="agent-view" aria-label="Agent session">
     <PanelGroup direction="vertical" onLayout={([height]) => { if (Math.abs(height - split) > .01) patch({ split: height }); }}>
-    <Panel className="agent-display" defaultSize={split} minSize={25}>
-      <div className="view-toolbar agent-toolbar">
-        <div className="view-toolbar-title"><AgentIcon size={15} />{services.sessions.get(runtime.providerId)?.label}</div>
-        <div className="agent-toolbar-status">
-          {status?.activity === "working" && <Button onPress={() => runtime.controller.interrupt()}>Interrupt</Button>}
-          {ended && <Button onPress={() => closeAgentRuntime(view.id)}>Choose session</Button>}
-          <div className="session-status" title={`${status?.reason ?? ""} (${status?.rule ?? "startup"})`}><span className={`status-dot status-${status?.activity}`} />{label}</div>
-        </div>
-      </div>
-      <TerminalSurface controller={runtime.controller} ref={terminalRef} onSelectionChange={setSelection} />
-    </Panel>
-    <PanelResizeHandle className="terminal-split" aria-label="Terminal height"><span /></PanelResizeHandle>
-    <Panel className="agent-composer-row" defaultSize={100 - split} minSize={composerMinimum}>
-      <AgentComposer key={runtime.controller.id} workspaceId={workspace.id} viewId={view.id} state={state} status={status}
-        planning={Boolean(providers.find((p) => p.id === runtime.providerId)?.capabilities?.planning)}
-        selection={selection} focusTerminal={() => terminalRef.current?.focus()} />
-      <aside className="support-column" aria-label="Prompt support">{services.widgets.forSlot("agent.composer.support").map((widget) => {
-        const Widget = widget.component;
-        return <Widget key={widget.id} workspaceId={workspace.id} viewId={view.id} />;
-      })}</aside>
-    </Panel>
+      <Panel className="agent-display" defaultSize={split} minSize={25}>{top}</Panel>
+      <PanelResizeHandle className="dock-resize" aria-label="Composer height"><span /></PanelResizeHandle>
+      <Panel className="agent-composer-panel" defaultSize={100 - split} minSize={composerMinimum}>{composer}</Panel>
     </PanelGroup>
   </section>;
 }

@@ -21,7 +21,7 @@ process.stdin.on("data", (data) => {
     screen("› pasted draft");
   }
   if (pending.includes("\r") && prompt) {
-    appendFileSync(process.env.COMPOSER_QA_LOG, JSON.stringify({ prompt }) + "\n");
+    appendFileSync(process.env.COMPOSER_QA_LOG, JSON.stringify({ prompt, cwd: process.cwd() }) + "\n");
     const sent = prompt;
     pending = ""; prompt = "";
     setTimeout(() => {

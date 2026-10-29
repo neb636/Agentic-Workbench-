@@ -1,0 +1,76 @@
+/* Right-sidebar panels: active views, files, source control. */
+.side-panel { display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; padding: 10px 10px 12px; overflow: auto; }
+.side-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; }
+.side-panel-header h2 { overflow: hidden; font-size: 13px; font-weight: 600; letter-spacing: -0.02em; text-overflow: ellipsis; white-space: nowrap; }
+.panel-section { display: grid; gap: 4px; }
+.panel-section-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 4px 2px; color: var(--wb-text-primary); font-weight: 600; }
+.panel-empty { padding: 8px 6px; color: var(--wb-text-secondary); line-height: 17px; }
+.panel-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--wb-bg-field);
+  border-radius: var(--wb-radius-md);
+  background: var(--wb-bg-field);
+  color: var(--wb-text-secondary);
+}
+.panel-search:focus-within { border-color: var(--wb-border); background: var(--wb-bg-app); }
+.panel-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--wb-text-primary); }
+.panel-search input::-webkit-search-cancel-button { display: none; }
+.panel-search button { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--wb-text-secondary); }
+
+.panel-list, .file-tree { display: grid; align-content: start; gap: 1px; outline: none; }
+.file-tree { flex: 1; min-height: 0; overflow: auto; }
+.panel-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: var(--wb-radius-sm);
+  color: var(--wb-text-primary);
+  outline: none;
+}
+.panel-list-item > svg { flex: none; color: var(--wb-text-secondary); }
+.panel-list-item small { flex: 1; min-width: 0; overflow: hidden; color: var(--wb-text-secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.panel-list-item small.tone-idle, .panel-list-item small[class^="tone-"] { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; }
+.panel-list-item[data-hovered] { background: var(--wb-bg-hover); }
+.panel-list-item.is-current { background: var(--wb-bg-selected); }
+.panel-list-item[data-focus-visible], .file-tree-item[data-focus-visible] .file-tree-row { box-shadow: inset 0 0 0 2px var(--wb-focus-ring); }
+.panel-list-item[data-disabled] { opacity: 0.5; }
+.file-tree-item { outline: none; }
+.file-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding-right: 8px;
+  border-radius: var(--wb-radius-sm);
+  color: var(--wb-text-primary);
+}
+.file-tree-row > svg { flex: none; color: var(--wb-text-secondary); }
+.file-tree-item[data-hovered] .file-tree-row { background: var(--wb-bg-hover); }
+.file-tree-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.views-panel .panel-list-item small { flex: none; margin-left: auto; }
+.file-tree-note { display: block; padding: 4px 30px; color: var(--wb-text-muted); font-size: 11px; }
+
+.branch-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-radius: var(--wb-radius-md);
+  background: var(--wb-bg-field);
+}
+.branch-name { flex: 1; min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.branch-row small { color: var(--wb-text-secondary); font-size: 11px; }
+.commit-area { display: grid; gap: 8px; }
+.commit-area textarea { min-height: 60px; }
+.commit-button { width: 100%; }
+.change-letter { flex: none; width: 14px; font: 600 11px var(--wb-font-mono); text-align: center; }
+.change-letter.kind-modified { color: var(--wb-status-warning); }
+.change-letter.kind-untracked, .change-letter.kind-added { color: var(--wb-status-ready); }
+.change-letter.kind-deleted, .change-letter.kind-conflicted { color: var(--wb-status-error); }
+.change-letter.kind-renamed { color: var(--wb-accent); }

@@ -2,8 +2,8 @@ import { create } from "zustand";
 import type { AgentSessionStatus } from "../../shared/models";
 import type { AgentProvider, AgentSessionController, SessionCreateContext } from "./session-provider-registry";
 
-interface Runtime { controller: AgentSessionController; providerId: string; status?: AgentSessionStatus; seenCompletion?: number; }
-export const useAgentRuntimes = create<{ sessions: Record<string, Runtime> }>(() => ({ sessions: {} }));
+export interface AgentRuntime { controller: AgentSessionController; providerId: string; status?: AgentSessionStatus; seenCompletion?: number; }
+export const useAgentRuntimes = create<{ sessions: Record<string, AgentRuntime> }>(() => ({ sessions: {} }));
 const pending = new Map<string, Promise<AgentSessionController>>();
 const generations = new Map<string, number>();
 const offStatus = new Map<string, () => void>();
