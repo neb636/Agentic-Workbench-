@@ -113,12 +113,13 @@ export function InstructionsManager({ workspaceId }: { workspaceId: string }) {
         <span>Your options</span>
         <IconButton label="Create option" onPress={() => setEditingId("new")}><PlusIcon size={15} /></IconButton>
       </div>
-      <div className="persona-list">
-        {options.map((stored) => <button className={`persona-list-item ${editingId === stored.option.id ? "is-selected" : ""}`} key={stored.option.id} onClick={() => setEditingId(stored.option.id)}>
+      <ListBox className="persona-list" aria-label="Your options" items={options.map((stored) => ({ ...stored, id: stored.option.id }))} selectionMode="single" disallowEmptySelection
+        selectedKeys={editing ? [editing.option.id] : []} onSelectionChange={(keys) => { if (keys !== "all" && keys.size) setEditingId(String([...keys][0])); }}
+        renderEmptyState={() => <p className="empty-copy">Built-in options are always available. Options you create appear here.</p>}>
+        {(stored) => <ListBoxItem className="persona-list-item" id={stored.id} textValue={stored.option.label}>
           <span>{stored.option.label}</span><small>{stored.option.category ?? "Uncategorized"} · {stored.scope === "global" ? "Global" : "Workspace"}</small>
-        </button>)}
-        {options.length === 0 && <p className="empty-copy">Built-in options are always available. Options you create appear here.</p>}
-      </div>
+        </ListBoxItem>}
+      </ListBox>
     </div>
     <div className="persona-editor-pane">
       <div className="dialog-section-header">

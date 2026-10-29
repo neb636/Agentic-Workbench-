@@ -33,6 +33,8 @@ test("screen rules distinguish ready, native drafts, working, decisions and unkn
   assert.equal(codex.detect(screen("› ", ["• Working (esc to interrupt)"])).activity, "working");
   assert.equal(claude.detect(screen("❯ ", ["✻ Thinking… (esc to interrupt)"])).canSubmit, true);
   assert.equal(claude.detect(screen("❯ 1. Yes, I trust this folder", ["Enter to confirm"])).activity, "waiting-for-input");
+  assert.equal(codex.detect(screen("› ", ["You can sign in later. Select an option below."])).canSubmit, true);
+  assert.equal(claude.detect(screen("❯ ", ["Do you want to proceed? Enter to confirm."])).activity, "ready");
   assert.equal(codex.detect(screen("Unexpected new UI")).activity, "unknown");
   assert.equal(codex.detect({ ...screen("› "), bracketedPaste: false }).canSubmit, false);
   assert.equal(codex.detect(screen("  second line", ["› first line"], 13)).inputState, "draft");

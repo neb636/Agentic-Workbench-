@@ -231,18 +231,18 @@ code { font-family: var(--wb-font-mono); font-size: 0.95em; }
 .persona-manager { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 18px; min-height: 380px; }
 .persona-list-pane, .persona-editor-pane { display: grid; align-content: start; gap: 10px; }
 .dialog-section-header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
-.persona-list { display: grid; gap: 2px; }
+.persona-list { display: grid; gap: 2px; outline: none; }
 .persona-list-item {
   display: grid;
   gap: 2px;
   padding: 8px 10px;
-  border: 0;
   border-radius: var(--wb-radius-md);
-  background: transparent;
-  text-align: left;
+  outline: none;
+  cursor: default;
 }
-.persona-list-item:hover { background: var(--wb-bg-hover); }
-.persona-list-item.is-selected { background: var(--wb-bg-selected); }
+.persona-list-item[data-hovered] { background: var(--wb-bg-hover); }
+.persona-list-item[data-selected] { background: var(--wb-bg-selected); }
+.persona-list-item[data-focus-visible] { box-shadow: inset 0 0 0 2px var(--wb-focus-ring); }
 .persona-list-item small, .empty-copy { color: var(--wb-text-secondary); font-size: 11px; }
 .settings-tabs .segmented { margin-bottom: 16px; }
 .agent-error { color: var(--wb-status-error); line-height: 17px; }

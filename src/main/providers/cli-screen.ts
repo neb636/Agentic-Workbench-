@@ -17,9 +17,6 @@ export function detectCliScreen(kind: "codex" | "claude") {
     const bottom = lines.slice(-12).join("\n");
     const result = (activity: AgentDetection["activity"], canSubmit: boolean, rule: string, reason: string, inputState: AgentDetection["inputState"] = "unavailable"): AgentDetection =>
       ({ activity, canSubmit, inputState, rule: `${kind}.${rule}`, reason });
-    if (/trust (?:this|the)|allow once|allow always|yes, (?:proceed|allow)|do you want to (?:proceed|allow)|would you like to (?:run|proceed)|enter to confirm|select an option|sign in|log in|choose.*account/i.test(bottom)) {
-      return result("waiting-for-input", false, "decision", "Respond in the terminal.");
-    }
     const working = kind === "codex"
       ? /esc to (?:interrupt|cancel)|• (?:Working|Thinking)|(?:Working|Thinking)\s*[.…]/i.test(bottom)
       : /esc to (?:interrupt|cancel)|(?:^|\n)\s*[✻✽✶✳✢·] [^\n]+…/i.test(bottom);
@@ -40,6 +37,10 @@ export function detectCliScreen(kind: "codex" | "claude") {
       : /^Try\s+["“].+["”]$/.test(match[1]));
     const empty = Boolean(match && !multiline && (!match[1].trim() || placeholder));
     const inputState = !match || !screen.bracketedPaste ? "unavailable" : empty ? "empty" : "draft";
+    // Transcript text can mention "sign in" or "select an option"; a decision UI replaces the empty input prompt.
+    if (!empty && /trust (?:this|the)|allow once|allow always|yes, (?:proceed|allow)|do you want to (?:proceed|allow)|would you like to (?:run|proceed)|enter to confirm|select an option|sign in|log in|choose.*account/i.test(bottom)) {
+      return result("waiting-for-input", false, "decision", "Respond in the terminal.");
+    }
     if (working) return result("working", inputState === "empty", "working", empty ? "Submit using the CLI’s native queue or steering." : "Clear the native draft or use the terminal input.", inputState);
     if (match) return result("ready", inputState === "empty", empty ? "prompt" : "native-draft", !screen.bracketedPaste ? "Use the terminal; paste mode is not available." : empty ? "Ready for a prompt." : "A draft is already in the terminal. Send or clear it there first.", inputState);
     return result("unknown", false, "unmatched", "Use the terminal until its prompt is recognized.");

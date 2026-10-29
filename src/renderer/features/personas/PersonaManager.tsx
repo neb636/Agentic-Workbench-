@@ -88,15 +88,16 @@ export function PersonaManager({ workspaceId }: { workspaceId: string }) {
           <span>Personas</span>
           <IconButton label="Create persona" onPress={() => setEditingId("new")}><PlusIcon size={15} /></IconButton>
         </div>
-        <div className="persona-list">
-          {personas.map((persona) => (
-            <button className={`persona-list-item ${editingId === persona.id ? "is-selected" : ""}`} key={persona.id} onClick={() => setEditingId(persona.id)}>
+        <ListBox className="persona-list" aria-label="Personas" items={personas} selectionMode="single" disallowEmptySelection
+          selectedKeys={editing ? [editing.id] : []} onSelectionChange={(keys) => { if (keys !== "all" && keys.size) setEditingId(String([...keys][0])); }}
+          renderEmptyState={() => <p className="empty-copy">No personas yet.</p>}>
+          {(persona) => (
+            <ListBoxItem className="persona-list-item" id={persona.id} textValue={persona.name}>
               <span>{persona.name}</span>
               <small>{persona.scope === "global" ? "Global" : "Workspace"}</small>
-            </button>
-          ))}
-          {personas.length === 0 && <p className="empty-copy">No personas yet.</p>}
-        </div>
+            </ListBoxItem>
+          )}
+        </ListBox>
       </div>
       <div className="persona-editor-pane">
         <div className="dialog-section-header">
