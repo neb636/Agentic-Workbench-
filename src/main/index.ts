@@ -2,15 +2,28 @@ import { app, BrowserWindow, shell } from "electron";
 import path from "node:path";
 import { AgentSessionManager } from "./agent-session-manager";
 import { registerIpc } from "./ipc";
-import { ProcessManager } from "./process-manager";
+import { ClaudeAgentProvider } from "./providers/claude-agent-provider";
 import { CodexAgentProvider } from "./providers/codex-agent-provider";
+import { GitSourceControlProvider } from "./providers/git-source-control-provider";
 import { PtyManager } from "./pty-manager";
+import { adoptLoginShellPath } from "./shell-environment";
+import { SourceControlService } from "./source-control/source-control-provider";
+import { WorkspaceFiles, WorkspaceRoots } from "./workspace-files";
+
+if (process.env.WORKBENCH_USER_DATA_DIR) app.setPath("userData", process.env.WORKBENCH_USER_DATA_DIR);
+if (app.isPackaged) adoptLoginShellPath();
 
 const ptyManager = new PtyManager();
-const processManager = new ProcessManager();
 const agentSessionManager = new AgentSessionManager([
-  new CodexAgentProvider(processManager),
+  new CodexAgentProvider(),
+  new ClaudeAgentProvider(),
 ]);
+const roots = new WorkspaceRoots();
+const workspaceServices = {
+  roots,
+  files: new WorkspaceFiles(roots),
+  sourceControl: new SourceControlService([new GitSourceControlProvider()]),
+};
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -18,9 +31,9 @@ function createWindow(): BrowserWindow {
     height: 920,
     minWidth: 960,
     minHeight: 640,
-    backgroundColor: "#0d0f13",
+    backgroundColor: "#f8f7f7",
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 15 },
+    trafficLightPosition: { x: 22, y: 22 },
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
@@ -51,7 +64,7 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
-  registerIpc(ptyManager, agentSessionManager);
+  registerIpc(ptyManager, agentSessionManager, workspaceServices);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -65,5 +78,4 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   agentSessionManager.terminateAll();
   ptyManager.terminateAll();
-  processManager.terminateAll();
 });

@@ -1,206 +1,89 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { TextArea } from "react-aria-components";
-import type { AgentOutputKind, AgentSessionStatus, PromptContribution } from "../../../shared/models";
+import { useEffect, useRef, useState } from "react";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import type { AgentProviderInfo, AgentViewState } from "../../../shared/models";
 import { services } from "../../core/services";
-import type { AgentSessionController } from "../../core/session-provider-registry";
+import { acknowledgeAgentCompletion, startAgentRuntime, useAgentRuntimes } from "../../core/agent-runtimes";
+import { errorMessage } from "../../core/errors";
 import type { ViewComponentProps } from "../../core/view-registry";
 import { useWorkbenchStore } from "../../state/workbench-store";
-import { AgentIcon, SendIcon, SparkIcon } from "../../ui/icons";
-import { Button, IconButton } from "../../ui/controls";
-
-type TranscriptItem =
-  | { id: string; kind: "user"; text: string; contributionCount: number }
-  | { id: string; kind: AgentOutputKind | "error"; text: string };
-
-function configuredProviderId(state: unknown): string | undefined {
-  if (typeof state !== "object" || state === null || !("providerId" in state)) return undefined;
-  return typeof state.providerId === "string" ? state.providerId : undefined;
-}
-
-function statusLabel(status: AgentSessionStatus): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
+import { Button } from "../../ui/controls";
+import { ChevronUpIcon } from "../../ui/icons";
+import { AgentComposer, type ComposerSession } from "./AgentComposer";
+import { prepareSessionFolder } from "./composer-state";
+import { SessionLauncher } from "./SessionLauncher";
+import { agentRuntimeStatus } from "./session-status";
+import { TerminalSurface, type TerminalSurfaceHandle } from "../terminal/TerminalSurface";
 
 export function AgentView({ view, workspace }: ViewComponentProps) {
-  const [prompt, setPrompt] = useState("");
-  const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
-  const [sessionStatus, setSessionStatus] = useState<AgentSessionStatus>("starting");
-  const controllerRef = useRef<AgentSessionController | undefined>(undefined);
-  const transcriptRef = useRef<HTMLDivElement>(null);
-  const personas = useWorkbenchStore((state) => state.personas);
-  const selectedPersonaId = useWorkbenchStore((state) => state.selectedPersonaByWorkspace[workspace.id]);
-  const allInstructions = useWorkbenchStore((state) => state.appendedInstructions);
-  const instructions = useMemo(
-    () => allInstructions.filter((item) => item.workspaceId === workspace.id),
-    [allInstructions, workspace.id],
-  );
-  const requestedProvider = services.sessions.get(configuredProviderId(view.state) ?? "");
-  const provider = requestedProvider?.kind === "agent" ? requestedProvider : services.sessions.firstAgent();
-
+  const state = (view.state ?? {}) as AgentViewState;
+  const runtime = useAgentRuntimes((s) => s.sessions[view.id]);
+  useEffect(() => { acknowledgeAgentCompletion(view.id); }, [view.id, runtime?.status?.completed]);
+  const update = useWorkbenchStore((s) => s.updateViewState);
+  const [providers, setProviders] = useState<AgentProviderInfo[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [selection, setSelection] = useState("");
+  const terminalRef = useRef<TerminalSurfaceHandle>(null);
+  const layoutRef = useRef<HTMLElement>(null);
+  const [composerMinimum, setComposerMinimum] = useState(40);
+  const hasQuotations = Boolean(state.quotations?.length);
+  const live = Boolean(runtime);
+  useEffect(() => {
+    const element = layoutRef.current;
+    if (!element) return;
+    const measure = () => setComposerMinimum(Math.min(75, Math.max(20, ((live ? 210 : 176) + (hasQuotations ? 48 : 0)) / element.clientHeight * 100)));
+    const observer = new ResizeObserver(measure);
+    observer.observe(element); measure();
+    return () => observer.disconnect();
+  }, [live, hasQuotations, state.composerCollapsed]);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     let active = true;
-    let controller: AgentSessionController | undefined;
-    const unsubscribers: Array<() => void> = [];
-    setSessionStatus("starting");
-    setPrompt("");
-    setTranscript([]);
-
-    if (!provider) {
-      setSessionStatus("error");
-      setTranscript((current) => [...current, {
-        id: crypto.randomUUID(),
-        kind: "error",
-        text: "No agent provider is registered.",
-      }]);
-      return;
-    }
-
-    void provider.create({ workspacePath: workspace.path })
-      .then((created) => {
-        if (!active) {
-          created.dispose();
-          return;
-        }
-        controller = created;
-        controllerRef.current = created;
-        unsubscribers.push(
-          created.onStatus(setSessionStatus),
-          created.onOutput((output) => setTranscript((current) => [...current, {
-            id: crypto.randomUUID(),
-            kind: output.kind,
-            text: output.text,
-          }])),
-          created.onError((message) => setTranscript((current) => [...current, {
-            id: crypto.randomUUID(),
-            kind: "error",
-            text: message,
-          }])),
-        );
-        setSessionStatus("ready");
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setSessionStatus("error");
-        setTranscript((current) => [...current, {
-          id: crypto.randomUUID(),
-          kind: "error",
-          text: `Unable to start agent session: ${String(error)}`,
-        }]);
-      });
-
-    return () => {
-      active = false;
-      unsubscribers.forEach((unsubscribe) => unsubscribe());
-      controller?.dispose();
-      if (controllerRef.current === controller) controllerRef.current = undefined;
-    };
-  }, [provider, view.id, workspace.path]);
-
-  useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
-  }, [transcript]);
-
-  const contributions = useMemo<PromptContribution[]>(() => {
-    const selectedPersona = personas.find((persona) => persona.id === selectedPersonaId);
-    return [
-      ...(selectedPersona
-        ? [{ id: selectedPersona.id, source: selectedPersona.name, kind: "persona" as const, content: selectedPersona.instructions, enabled: true }]
-        : []),
-      ...instructions.map((instruction) => ({
-        id: instruction.id,
-        source: "Appended instructions",
-        kind: "instruction" as const,
-        content: instruction.content,
-        enabled: instruction.enabled,
-      })),
-    ];
-  }, [instructions, personas, selectedPersonaId]);
-
-  const submit = () => {
-    const controller = controllerRef.current;
-    if (!prompt.trim() || !controller || sessionStatus === "running") return;
-    const assembled = services.promptAssembler.assemble(prompt, contributions);
-    setTranscript((current) => [...current, {
-      id: crypto.randomUUID(),
-      kind: "user",
-      text: assembled.userPrompt,
-      contributionCount: assembled.contributions.length,
-    }]);
-    setPrompt("");
-    void controller.sendPrompt(assembled.content).catch((error: unknown) => {
-      setSessionStatus("error");
-      setTranscript((current) => [...current, {
-        id: crypto.randomUUID(),
-        kind: "error",
-        text: `Unable to send prompt: ${String(error)}`,
-      }]);
-    });
+    void window.workbench.agent.providers().then((items) => { if (active) setProviders(items); }).catch((e: unknown) => { if (active) setError(String(e)); });
+    return () => { active = false; };
+  }, []);
+  const selected = state.providerId ?? providers.find((p) => p.available)?.id ?? providers[0]?.id;
+  const patch = (value: Partial<AgentViewState>) => update(workspace.id, view.id, value);
+  const start = async (resume = false) => {
+    if (busy) return;
+    const provider = services.sessions.get(selected ?? "");
+    if (provider?.kind !== "agent") return;
+    setBusy(true); setError(""); patch({ providerId: provider.id });
+    try { await startAgentRuntime(view.id, provider, { workspacePath: await prepareSessionFolder({ workspaceId: workspace.id, viewId: view.id }), resume }); }
+    catch (e) { if (alive.current) setError(errorMessage(e)); }
+    finally { if (alive.current) setBusy(false); }
   };
+  const session: ComposerSession | undefined = runtime && {
+    status: runtime.status,
+    display: agentRuntimeStatus(runtime),
+    planning: Boolean(providers.find((p) => p.id === runtime.providerId)?.capabilities?.planning),
+    selection,
+    interrupt: () => runtime.controller.interrupt(),
+    focusTerminal: () => terminalRef.current?.focus(),
+  };
+  const top = runtime
+    ? <div className="terminal-card"><TerminalSurface controller={runtime.controller} ref={terminalRef} onSelectionChange={setSelection} /></div>
+    : <SessionLauncher workspace={workspace} state={state} providers={providers} selected={selected} busy={busy} error={error}
+        onChange={patch} onStart={(resume) => void start(resume)} />;
+  const composer = <AgentComposer key={runtime?.controller.id ?? "setup"} workspaceId={workspace.id} viewId={view.id} agentLabel={services.sessions.get(runtime?.providerId ?? selected ?? "")?.label ?? "the agent"}
+    state={{ ...state, providerId: selected }} session={session} canLaunch={Boolean(providers.find((p) => p.id === selected)?.available)}
+    onCollapse={() => patch({ composerCollapsed: true })} />;
 
-  const widgets = services.widgets.forSlot("agent.composer.support");
-  const canSend = Boolean(prompt.trim() && controllerRef.current && sessionStatus !== "running");
+  if (state.composerCollapsed) return <section className="agent-view is-composer-collapsed" aria-label="Agent session">
+    <div className="agent-display">{top}</div>
+    <div className="composer-collapsed">
+      {session && <span className={`session-pill tone-${session.display.tone}`}><span className="status-dot" />{session.display.label}</span>}
+      <Button className="strip-button" onPress={() => patch({ composerCollapsed: false })}><ChevronUpIcon size={13} />Show composer</Button>
+    </div>
+  </section>;
 
-  return (
-    <section className="agent-view" aria-label="Agent session">
-      <div className="agent-display">
-        <div className="view-toolbar agent-toolbar">
-          <div className="view-toolbar-title"><AgentIcon size={15} /> Agent session{provider ? ` · ${provider.label}` : ""}</div>
-          <div className="agent-toolbar-status">
-            {sessionStatus === "running" && <Button className="agent-cancel" onPress={() => controllerRef.current?.interrupt()}>Cancel</Button>}
-            <div className="session-status"><span className={`status-dot status-${sessionStatus}`} />{statusLabel(sessionStatus)}</div>
-          </div>
-        </div>
-        <div className="agent-transcript" ref={transcriptRef} role="log" aria-live="polite">
-          {transcript.length === 0 ? (
-            <div className="agent-empty">
-              <div className="agent-empty-icon"><SparkIcon size={24} /></div>
-              <h2>What would you like to work on?</h2>
-              <p>Start a local agent session. Your persona and enabled instructions will be assembled with the prompt.</p>
-            </div>
-          ) : (
-            transcript.map((item) => item.kind === "user" ? (
-              <div className="prompt-message" key={item.id}>
-                <div className="message-label">You</div>
-                <p>{item.text}</p>
-                {item.contributionCount > 0 && <span>{item.contributionCount} prompt contribution{item.contributionCount === 1 ? "" : "s"}</span>}
-              </div>
-            ) : (
-              <div className={`agent-output agent-output-${item.kind}`} key={item.id}>
-                <div className="message-label">{item.kind === "assistant" ? "Agent" : item.kind === "error" ? "Error" : "Activity"}</div>
-                <pre>{item.text}</pre>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-      <div className="agent-composer-row">
-        <div className="composer-panel">
-          <TextArea
-            aria-label="Prompt"
-            placeholder="Ask the agent to explore, build, or explain…"
-            value={prompt}
-            disabled={!controllerRef.current || sessionStatus === "running"}
-            onChange={(event) => setPrompt(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                submit();
-              }
-            }}
-          />
-          <div className="composer-actions">
-            <div className="composer-hint">Enter to send · Shift+Enter for a new line</div>
-            <IconButton label="Send prompt" onPress={submit} isDisabled={!canSend} className="send-button"><SendIcon size={16} /></IconButton>
-          </div>
-        </div>
-        <aside className="support-column" aria-label="Prompt support">
-          {widgets.map((widget) => {
-            const Widget = widget.component;
-            return <Widget key={widget.id} workspaceId={workspace.id} viewId={view.id} />;
-          })}
-          {widgets.length === 0 && <Button isDisabled>No support widgets</Button>}
-        </aside>
-      </div>
-    </section>
-  );
+  const split = Math.min(100 - composerMinimum, Math.max(25, typeof state.split === "number" ? state.split : 62));
+  return <section ref={layoutRef} className="agent-view" aria-label="Agent session">
+    <PanelGroup direction="vertical" onLayout={([height]) => { if (Math.abs(height - split) > .01) patch({ split: height }); }}>
+      <Panel className="agent-display" defaultSize={split} minSize={25}>{top}</Panel>
+      <PanelResizeHandle className="dock-resize" aria-label="Composer height"><span /></PanelResizeHandle>
+      <Panel className="agent-composer-panel" defaultSize={100 - split} minSize={composerMinimum}>{composer}</Panel>
+    </PanelGroup>
+  </section>;
 }

@@ -12,10 +12,10 @@ export class CommandRegistry {
     return () => this.handlers.delete(id);
   }
 
-  execute<TResult = unknown>(id: string, args?: unknown): Promise<TResult> {
+  async execute<TResult = unknown>(id: string, args?: unknown): Promise<TResult> {
     const handler = this.handlers.get(id);
-    if (!handler) return Promise.reject(new Error(`Unknown command: ${id}`));
-    return Promise.resolve(handler(args) as TResult);
+    if (!handler) throw new Error(`Unknown command: ${id}`);
+    return handler(args) as TResult;
   }
 
   has(id: string): boolean {

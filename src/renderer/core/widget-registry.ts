@@ -1,9 +1,10 @@
 import type { ComponentType } from "react";
 import { Registry } from "./registry";
 
+/** Slots pass whatever context they have; a workspace row passes only its workspace. */
 export interface WidgetProps {
-  workspaceId: string;
-  viewId: string;
+  workspaceId?: string;
+  viewId?: string;
 }
 
 export interface WidgetDefinition {

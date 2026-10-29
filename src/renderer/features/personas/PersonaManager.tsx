@@ -1,14 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button as AriaButton,
-  Dialog,
-  DialogTrigger,
   Input,
   Label,
   ListBox,
   ListBoxItem,
-  Modal,
-  ModalOverlay,
   Popover,
   Select,
   SelectValue,
@@ -16,10 +12,9 @@ import {
   TextField,
 } from "react-aria-components";
 import type { Persona } from "../../../shared/models";
-import type { WidgetProps } from "../../core/widget-registry";
 import { createId } from "../../core/id";
 import { useWorkbenchStore } from "../../state/workbench-store";
-import { ChevronDownIcon, EditIcon, PlusIcon, SparkIcon, TrashIcon } from "../../ui/icons";
+import { ChevronDownIcon, PlusIcon, TrashIcon } from "../../ui/icons";
 import { Button, IconButton } from "../../ui/controls";
 
 interface PersonaFormProps {
@@ -79,7 +74,7 @@ function PersonaForm({ persona, workspaceId, onSave }: PersonaFormProps) {
   );
 }
 
-function PersonaManager({ workspaceId }: { workspaceId: string }) {
+export function PersonaManager({ workspaceId }: { workspaceId: string }) {
   const personas = useWorkbenchStore((state) => state.personas);
   const upsertPersona = useWorkbenchStore((state) => state.upsertPersona);
   const deletePersona = useWorkbenchStore((state) => state.deletePersona);
@@ -93,15 +88,16 @@ function PersonaManager({ workspaceId }: { workspaceId: string }) {
           <span>Personas</span>
           <IconButton label="Create persona" onPress={() => setEditingId("new")}><PlusIcon size={15} /></IconButton>
         </div>
-        <div className="persona-list">
-          {personas.map((persona) => (
-            <button className={`persona-list-item ${editingId === persona.id ? "is-selected" : ""}`} key={persona.id} onClick={() => setEditingId(persona.id)}>
+        <ListBox className="persona-list" aria-label="Personas" items={personas} selectionMode="single" disallowEmptySelection
+          selectedKeys={editing ? [editing.id] : []} onSelectionChange={(keys) => { if (keys !== "all" && keys.size) setEditingId(String([...keys][0])); }}
+          renderEmptyState={() => <p className="empty-copy">No personas yet.</p>}>
+          {(persona) => (
+            <ListBoxItem className="persona-list-item" id={persona.id} textValue={persona.name}>
               <span>{persona.name}</span>
               <small>{persona.scope === "global" ? "Global" : "Workspace"}</small>
-            </button>
-          ))}
-          {personas.length === 0 && <p className="empty-copy">No personas yet.</p>}
-        </div>
+            </ListBoxItem>
+          )}
+        </ListBox>
       </div>
       <div className="persona-editor-pane">
         <div className="dialog-section-header">
@@ -110,53 +106,6 @@ function PersonaManager({ workspaceId }: { workspaceId: string }) {
         </div>
         <PersonaForm key={editing?.id ?? "new"} persona={editing} workspaceId={workspaceId} onSave={(persona) => { upsertPersona(persona); setEditingId(persona.id); }} />
       </div>
-    </div>
-  );
-}
-
-export function PersonaWidget({ workspaceId }: WidgetProps) {
-  const allPersonas = useWorkbenchStore((state) => state.personas);
-  const selectedId = useWorkbenchStore((state) => state.selectedPersonaByWorkspace[workspaceId]);
-  const selectPersona = useWorkbenchStore((state) => state.selectPersona);
-  const personas = useMemo(
-    () => allPersonas.filter((persona) => persona.scope === "global" || persona.workspaceId === workspaceId),
-    [allPersonas, workspaceId],
-  );
-
-  return (
-    <div className="support-card">
-      <div className="support-card-header">
-        <div><SparkIcon size={15} /><span>Persona</span></div>
-        <DialogTrigger>
-          <IconButton label="Manage personas"><EditIcon size={14} /></IconButton>
-          <ModalOverlay className="wb-modal-overlay" isDismissable>
-            <Modal className="wb-modal">
-              <Dialog aria-label="Manage personas" className="wb-dialog">
-                {({ close }) => (
-                  <>
-                    <div className="dialog-header"><div><h2>Manage personas</h2><p>Create reusable instruction sets for agent sessions.</p></div><Button onPress={close}>Done</Button></div>
-                    <PersonaManager workspaceId={workspaceId} />
-                  </>
-                )}
-              </Dialog>
-            </Modal>
-          </ModalOverlay>
-        </DialogTrigger>
-      </div>
-      <Select
-        aria-label="Active persona"
-        selectedKey={selectedId ?? "none"}
-        onSelectionChange={(key) => selectPersona(workspaceId, key === "none" ? undefined : String(key))}
-      >
-        <AriaButton className="select-trigger"><SelectValue>{({ selectedText }) => selectedText || "No persona"}</SelectValue><ChevronDownIcon size={14} /></AriaButton>
-        <Popover className="wb-popover" placement="bottom end">
-          <ListBox>
-            <ListBoxItem id="none" textValue="No persona"><div><span>No persona</span><small>Send only the prompt and instructions</small></div></ListBoxItem>
-            {personas.map((persona) => <ListBoxItem id={persona.id} key={persona.id} textValue={persona.name}><div><span>{persona.name}</span><small>{persona.description || "No description"}</small></div></ListBoxItem>)}
-          </ListBox>
-        </Popover>
-      </Select>
-      <p className="support-card-copy">{personas.find((persona) => persona.id === selectedId)?.description ?? "Choose a reusable style and set of instructions."}</p>
     </div>
   );
 }

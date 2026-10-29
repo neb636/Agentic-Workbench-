@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PromptCondition } from "./prompt-options";
 
 export const workbenchViewSchema = z.object({
   id: z.string(),
@@ -25,20 +26,77 @@ export const personaSchema = z.object({
   workspaceId: z.string().optional(),
 });
 
-export const appendedInstructionSchema = z.object({
-  id: z.string(),
-  workspaceId: z.string(),
-  content: z.string(),
-  enabled: z.boolean(),
+export const promptConditionSchema: z.ZodType<PromptCondition> = z.lazy(() => z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("all"), conditions: z.array(promptConditionSchema) }),
+  z.object({ kind: z.literal("any"), conditions: z.array(promptConditionSchema) }),
+  z.object({ kind: z.literal("not"), condition: promptConditionSchema }),
+  z.object({ kind: z.literal("isOn"), option: z.string() }),
+  z.object({ kind: z.literal("isChoice"), option: z.string(), choice: z.string() }),
+]));
+
+const promptOptionChoiceSchema = z.object({
+  id: z.string().min(1),
+  label: z.string(),
+  text: z.string(),
+  description: z.string().optional(),
+});
+
+const optionFieldsSchema = {
+  id: z.string().min(1),
+  label: z.string(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  when: promptConditionSchema.optional(),
+  display: z.enum(["list", "segmented", "dropdown"]).optional(),
+  resetAfterSend: z.boolean().optional(),
+};
+
+export const promptOptionDefinitionSchema = z.discriminatedUnion("kind", [
+  z.object({ ...optionFieldsSchema, kind: z.literal("toggle"), defaultOn: z.boolean(), text: z.string() }),
+  z.object({ ...optionFieldsSchema, kind: z.literal("select"), defaultChoice: z.string(), choices: z.array(promptOptionChoiceSchema) }),
+  z.object({ ...optionFieldsSchema, kind: z.literal("multiSelect"), defaultChoices: z.array(z.string()), choices: z.array(promptOptionChoiceSchema) }),
+  z.object({ ...optionFieldsSchema, kind: z.literal("text"), placeholder: z.string(), defaultValue: z.string(),
+    maxLength: z.number().int().min(1).max(10_000), template: z.string() }),
+]);
+
+export const storedPromptOptionSchema = z.object({
+  scope: z.enum(["global", "workspace"]),
+  workspaceId: z.string().optional(),
+  option: promptOptionDefinitionSchema,
+});
+
+export const layoutStateSchema = z.object({
+  leftSize: z.number().min(0).max(100).optional(),
+  rightSize: z.number().min(0).max(100).optional(),
+  leftCollapsed: z.boolean().default(false),
+  rightCollapsed: z.boolean().default(false),
+  rightPanel: z.string().optional(),
 });
 
 export const persistedStateSchema = z.object({
   workspaces: z.array(workspaceSchema).default([]),
   activeWorkspaceId: z.string().optional(),
   personas: z.array(personaSchema).default([]),
-  selectedPersonaByWorkspace: z.record(z.string(), z.string().optional()).default({}),
-  appendedInstructions: z.array(appendedInstructionSchema).default([]),
+  instructionOptions: z.array(storedPromptOptionSchema).default([]),
+  layout: layoutStateSchema.default({ leftCollapsed: false, rightCollapsed: false }),
 });
+
+const legacyInstructionSchema = z.object({ id: z.string(), workspaceId: z.string(), content: z.string(), enabled: z.boolean() });
+
+/** Converts state written before prompt options existed; unknown shapes pass through to normal validation. */
+export function migratePersistedState(input: unknown): unknown {
+  if (typeof input !== "object" || input === null) return input;
+  const source = input as Record<string, unknown>;
+  if (source.instructionOptions !== undefined || !Array.isArray(source.appendedInstructions)) return input;
+  const instructionOptions = source.appendedInstructions.flatMap((item) => {
+    const legacy = legacyInstructionSchema.safeParse(item);
+    if (!legacy.success || !legacy.data.content.trim()) return [];
+    const { id, workspaceId, content, enabled } = legacy.data;
+    const label = content.trim().split("\n")[0].slice(0, 60);
+    return [{ scope: "workspace", workspaceId, option: { id, kind: "toggle", label, category: "Custom", defaultOn: enabled, text: content } }];
+  });
+  return { ...source, instructionOptions };
+}
 
 export const ptyCreateOptionsSchema = z.object({
   cwd: z.string().min(1),
@@ -62,11 +120,22 @@ export const ptyTerminateSchema = z.object({ sessionId: z.string() });
 export const agentSessionCreateOptionsSchema = z.object({
   providerId: z.string().min(1),
   workspacePath: z.string().min(1),
+  viewId: z.string().min(1),
+  cols: z.number().int().min(2).max(1000),
+  rows: z.number().int().min(1).max(1000),
+  resume: z.boolean().optional(),
 });
 
 export const agentPromptSchema = z.object({
   sessionId: z.string().min(1),
-  prompt: z.string().trim().min(1).max(500_000),
+  prompt: z.string().min(1).max(500_000),
+  intent: z.enum(["default", "plan"]),
 });
 
 export const agentSessionActionSchema = z.object({ sessionId: z.string().min(1) });
+
+export const fileLocationSchema = z.object({ root: z.string().min(1), path: z.string().max(4096) });
+export const fileFindSchema = z.object({ root: z.string().min(1), query: z.string().max(256) });
+export const workspaceRootSchema = z.object({ root: z.string().min(1) });
+export const commitSchema = z.object({ root: z.string().min(1), message: z.string().trim().min(1).max(10_000) });
+export const createWorktreeSchema = z.object({ root: z.string().min(1), branch: z.string().min(1).max(200) });

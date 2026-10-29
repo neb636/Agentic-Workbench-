@@ -1,0 +1,161 @@
+import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
+import {
+  Button as AriaButton,
+  Checkbox,
+  CheckboxGroup,
+  Dialog,
+  DialogTrigger,
+  Input,
+  Label,
+  ListBox,
+  ListBoxItem,
+  Modal,
+  ModalOverlay,
+  Popover,
+  Select,
+  SelectValue,
+  Switch,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+} from "react-aria-components";
+import {
+  createEvaluator,
+  resolveOptions,
+  type PromptOptionDefinition,
+  type PromptOptionEvaluator,
+  type PromptOptionValue,
+  type PromptSelections,
+} from "../../../../shared/prompt-options";
+import type { PromptMenuDefinition, PromptMenuOptions } from "../../../core/prompt-menu-registry";
+import { services } from "../../../core/services";
+import { useWorkbenchStore } from "../../../state/workbench-store";
+import { Button } from "../../../ui/controls";
+import { CheckIcon, ChevronDownIcon } from "../../../ui/icons";
+import { setPromptSelections, type ComposerTarget } from "../composer-state";
+
+function groupByCategory(options: PromptOptionDefinition[]): [string, PromptOptionDefinition[]][] {
+  const groups = new Map<string, PromptOptionDefinition[]>();
+  for (const option of options) groups.set(option.category ?? "", [...(groups.get(option.category ?? "") ?? []), option]);
+  return [...groups.entries()];
+}
+
+function OptionControl({ option, value, onChange }: {
+  option: PromptOptionDefinition;
+  value: PromptOptionValue;
+  onChange: (value: PromptOptionValue) => void;
+}) {
+  switch (option.kind) {
+    case "toggle":
+      return <Switch className="prompt-option prompt-switch" isSelected={value === true} onChange={onChange}>
+        <span className="prompt-option-copy"><span>{option.label}</span>{option.description && <small>{option.description}</small>}</span>
+        <span className="switch-track" aria-hidden="true"><span className="switch-thumb" /></span>
+      </Switch>;
+    case "select": {
+      const display = option.display ?? (option.choices.length <= 4 ? "segmented" : "dropdown");
+      if (display === "list") {
+        return <ListBox aria-label={option.label} className="prompt-choice-list" selectionMode="single" disallowEmptySelection
+          selectedKeys={[String(value)]} onSelectionChange={(keys) => { if (keys !== "all" && keys.size) onChange(String([...keys][0])); }}>
+          {option.choices.map((choice) => <ListBoxItem key={choice.id} id={choice.id} textValue={choice.label} className="prompt-choice">
+            {({ isSelected }) => <>
+              <span className="prompt-option-copy"><span>{choice.label}</span>{choice.description && <small>{choice.description}</small>}</span>
+              {isSelected && <CheckIcon size={14} />}
+            </>}
+          </ListBoxItem>)}
+        </ListBox>;
+      }
+      if (display === "segmented") {
+        return <div className="prompt-option prompt-segmented-option">
+          <span className="prompt-option-copy"><span>{option.label}</span>{option.description && <small>{option.description}</small>}</span>
+          <ToggleButtonGroup aria-label={option.label} className="segmented" selectionMode="single" disallowEmptySelection
+            selectedKeys={[String(value)]} onSelectionChange={(keys) => { if (keys.size) onChange(String([...keys][0])); }}>
+            {option.choices.map((choice) => <ToggleButton key={choice.id} id={choice.id} className="segment">{choice.label}</ToggleButton>)}
+          </ToggleButtonGroup>
+        </div>;
+      }
+      return <Select className="prompt-option prompt-select" selectedKey={String(value)} onSelectionChange={(key) => onChange(String(key))}>
+        <Label className="prompt-option-copy"><span>{option.label}</span></Label>
+        <AriaButton className="select-trigger"><SelectValue /><ChevronDownIcon size={13} /></AriaButton>
+        <Popover className="wb-popover"><ListBox>{option.choices.map((choice) => <ListBoxItem key={choice.id} id={choice.id}>{choice.label}</ListBoxItem>)}</ListBox></Popover>
+      </Select>;
+    }
+    case "multiSelect":
+      return <CheckboxGroup className="prompt-option prompt-checkbox-group" value={Array.isArray(value) ? value : []} onChange={onChange}>
+        <Label className="prompt-option-copy"><span>{option.label}</span>{option.description && <small>{option.description}</small>}</Label>
+        <div className="prompt-checkboxes">{option.choices.map((choice) => <Checkbox key={choice.id} value={choice.id} className="wb-checkbox">
+          <span className="checkbox-box"><CheckIcon size={11} /></span><span>{choice.label}</span>
+        </Checkbox>)}</div>
+      </CheckboxGroup>;
+    case "text":
+      return <TextField className="prompt-option prompt-text-option" value={typeof value === "string" ? value : ""} maxLength={option.maxLength} onChange={onChange}>
+        <Label className="prompt-option-copy"><span>{option.label}</span>{option.description && <small>{option.description}</small>}</Label>
+        <Input placeholder={option.placeholder} />
+      </TextField>;
+  }
+}
+
+function MenuOptions({ options, evaluator, onChange }: {
+  options: PromptOptionDefinition[];
+  evaluator: PromptOptionEvaluator;
+  onChange: (option: PromptOptionDefinition, value: PromptOptionValue) => void;
+}) {
+  const visible = options.filter((option) => evaluator.isVisible(option.id));
+  if (!visible.length) return <p className="prompt-menu-empty">No options yet. Use Manage to add some.</p>;
+  return <>{groupByCategory(visible).map(([category, items]) => <section className="prompt-menu-group" key={category || "default"} aria-label={category || undefined}>
+    {category && <h4>{category}</h4>}
+    {items.map((option) => <OptionControl key={option.id} option={option} value={evaluator.value(option)} onChange={(value) => onChange(option, value)} />)}
+  </section>)}</>;
+}
+
+function menuSummary(options: PromptOptionDefinition[], selections: PromptSelections, everyOption: PromptOptionDefinition[]): string | undefined {
+  const resolved = resolveOptions(options, selections, everyOption);
+  if (!resolved.length) return undefined;
+  return options.length === 1 ? resolved[0].summary : String(resolved.length);
+}
+
+/** Renders every registered prompt menu as a composer button with an options popover. */
+export function PromptMenuBar({ target, selections }: { target: ComposerTarget; selections: PromptSelections }) {
+  // Menus read personas and stored options from the store; re-render when it changes.
+  useWorkbenchStore(useShallow((state) => [state.personas, state.instructionOptions]));
+  const [managing, setManaging] = useState<PromptMenuDefinition>();
+  const menus: PromptMenuOptions[] = services.promptMenus.resolve(target);
+  const everyOption = menus.flatMap((item) => item.options);
+  const evaluator = createEvaluator(everyOption, selections);
+  const change = (option: PromptOptionDefinition, value: PromptOptionValue) => setPromptSelections(target, { ...selections, [option.id]: value });
+  const Manager = managing?.manage?.component;
+
+  return <div className="prompt-menu-bar">
+    {menus.map(({ menu, options }) => {
+      const Icon = menu.icon;
+      const summary = menuSummary(options, selections, everyOption);
+      return <DialogTrigger key={menu.id}>
+        <AriaButton className={`composer-chip ${summary ? "is-active" : ""}`} aria-label={summary ? `${menu.label}: ${summary}` : menu.label}>
+          <Icon size={14} /><span>{menu.label}</span>{summary && <span className="composer-chip-value">{summary}</span>}<ChevronDownIcon size={12} />
+        </AriaButton>
+        <Popover className="wb-popover prompt-menu-popover" placement="top start" offset={10}>
+          <Dialog aria-label={menu.label} className="prompt-menu-dialog">
+            {({ close }) => <>
+              <header className="prompt-menu-header">
+                <div><h3>{menu.label}</h3><p>{menu.description}</p></div>
+                {menu.manage && <Button className="link-button" onPress={() => { close(); setManaging(menu); }}>Manage</Button>}
+              </header>
+              <div className="prompt-menu-body"><MenuOptions options={options} evaluator={evaluator} onChange={change} /></div>
+            </>}
+          </Dialog>
+        </Popover>
+      </DialogTrigger>;
+    })}
+    <ModalOverlay className="wb-modal-overlay" isDismissable isOpen={Boolean(managing)} onOpenChange={(open) => { if (!open) setManaging(undefined); }}>
+      <Modal className="wb-modal">
+        <Dialog aria-label={managing?.manage?.title} className="wb-dialog">
+          <div className="dialog-header">
+            <div><h2>{managing?.manage?.title}</h2><p>{managing?.manage?.description}</p></div>
+            <Button onPress={() => setManaging(undefined)}>Done</Button>
+          </div>
+          {Manager && <Manager workspaceId={target.workspaceId} />}
+        </Dialog>
+      </Modal>
+    </ModalOverlay>
+  </div>;
+}
