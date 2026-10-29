@@ -31,7 +31,7 @@ await writeFile(executable, `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${s
 // Written in the pre-prompt-options format, so loading also exercises the migration.
 await writeFile(join(directory, "workbench-state.json"), JSON.stringify({
   workspaces: [{ id: "qa", name: "Composer QA", path: repo, activeViewId: "agent", views: [
-    { id: "agent", workspaceId: "qa", type: "agent", title: "Untitled", state: { providerId: "codex.cli", autoTitle: true } },
+    { id: "agent", workspaceId: "qa", type: "agent", title: "Untitled", state: { autoTitle: true } },
     { id: "other", workspaceId: "qa", type: "agent", title: "Other", state: { providerId: "codex.cli" } },
   ] }], activeWorkspaceId: "qa",
   personas: [{ id: "p", name: "Concise", instructions: "Be concise.", description: "Brief answers", scope: "global" }],
@@ -69,7 +69,7 @@ try {
 
   // Shell: three panes, nested sessions, and the launcher for a session that has not started.
   await sidebar.getByRole("row", { name: /Composer QA/ }).waitFor();
-  assert.match(await sidebar.getByRole("row", { name: /Untitled/ }).innerText(), /Setup · Codex/);
+  assert.match(await sidebar.getByRole("row", { name: /Untitled/ }).innerText(), /Setup/);
   await page.getByRole("heading", { name: "Start a new session" }).waitFor();
   assert.match(await page.locator(".harness-option").filter({ hasText: "Claude Code" }).innerText(), /Not installed/);
   await page.getByRole("radio", { name: /Codex/ }).waitFor();

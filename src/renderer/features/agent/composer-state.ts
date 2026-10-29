@@ -176,13 +176,15 @@ export function registerComposerContributions(): void {
     }
   });
   // The CLI starts when the first prompt is sent: prepare its folder, launch it, wait for its input, then deliver.
-  services.commands.register<ComposerTarget>("agent.session.launch", async (target) => {
+  // `providerId` is the harness shown as selected, which may be a default that was never saved to the view.
+  services.commands.register<ComposerTarget & { providerId?: string }>("agent.session.launch", async ({ providerId, ...target }) => {
     const workspace = useWorkbenchStore.getState().workspaces.find((w) => w.id === target.workspaceId);
     const state = stateFor(target);
     const composer = useComposerState.getState().views[target.viewId];
     if (!workspace || !state?.draft?.trim() || composer?.launching || composer?.sending) return;
-    const provider = services.sessions.get(state.providerId ?? "");
+    const provider = services.sessions.get(providerId ?? state.providerId ?? "");
     if (provider?.kind !== "agent") { notSent(target.viewId, "Choose an available harness first."); return; }
+    if (state.providerId !== provider.id) patchView(target, { providerId: provider.id });
     updateRuntime(target.viewId, { launching: true, result: undefined });
     try {
       const cwd = await prepareSessionFolder(target);

@@ -62,7 +62,7 @@ export function AgentComposer({ workspaceId, viewId, agentLabel, state, session,
   const send = () => {
     if (!canSend) return;
     setError(""); promptRef.current?.focus();
-    void services.commands.execute(session ? "agent.composer.send" : "agent.session.launch", target).catch((e: unknown) => setError(String(e)));
+    void services.commands.execute(session ? "agent.composer.send" : "agent.session.launch", { ...target, providerId: state.providerId }).catch((e: unknown) => setError(String(e)));
   };
   const quote = async () => {
     await services.commands.execute("agent.composer.quote", { ...target, text: session?.selection ?? "" });
