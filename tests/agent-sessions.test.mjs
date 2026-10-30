@@ -67,7 +67,7 @@ test("Claude recognizes a typed planning prefix with native argument hints, not 
   assert.equal(prefix.acknowledged(screen("❯ /other", [], 8)), false);
 });
 
-function setup(provider = new CodexAgentProvider()) {
+function setup(provider = Object.assign(new CodexAgentProvider(), { startupSettleMs: 0 })) {
   const events = [], writes = [], processes = [];
   const owner = { isDestroyed: () => false, send: (_channel, event) => events.push(event) };
   // Discovery resolves a real executable; the test injects only the PTY boundary.
@@ -276,5 +276,44 @@ test("a decision during command entry prevents prompt paste and Enter", async ()
     assert.equal(result.outcome, "uncertain");
     assert.equal(result.stage, "prefix");
     assert.deepEqual(s.writes, ["/plan "]);
+  } finally { s.manager.terminateAll(); }
+});
+
+test("a startup input that is replaced by a trust dialog never receives a prompt", async () => {
+  const s = setup(Object.assign(new CodexAgentProvider(), { startupSettleMs: 150 }));
+  try {
+    s.output("\x1b[?2004h› \x1b[2mAsk Codex to do anything\r\x1b[2C");
+    const starting = (await s.manager.attach(s.id, s.owner)).status;
+    assert.equal(starting.canSubmit, false);
+    assert.equal(starting.lifecycle, "starting");
+    assert.equal((await s.manager.sendPrompt(s.id, request("hello"), s.owner)).outcome, "not-sent");
+    s.output("\x1b[2J\x1b[HTrust this folder?\r\n› 1. Trust and continue");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal((await s.manager.attach(s.id, s.owner)).status.activity, "waiting-for-input");
+    s.output("\x1b[2J\x1b[H\x1b[?2004h› \x1b[2mAsk Codex to do anything\r\x1b[2C");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const ready = (await s.manager.attach(s.id, s.owner)).status;
+    assert.equal(ready.canSubmit, true);
+    assert.equal(ready.lifecycle, "alive");
+    assert.equal(s.events.at(-1).status.canSubmit, true);
+    assert.deepEqual(s.writes, []);
+  } finally { s.manager.terminateAll(); }
+});
+
+test("a draft held while Codex finishes startup is confirmed once it submits", async () => {
+  const s = setup();
+  try {
+    s.output("\x1b[?2004h› ");
+    s.processes[0].write = (data) => {
+      s.writes.push(data);
+      if (data.startsWith("\x1b[200~")) s.output("\r\x1b[2K› hello");
+      if (data === "\r") {
+        s.output("\r\n  Waiting for startup  · esc cancel\x1b[1A\r\x1b[7C");
+        setTimeout(() => s.output("\x1b[2J\x1b[H\x1b[?2004h› "), 2500);
+      }
+    };
+    const result = await s.manager.sendPrompt(s.id, request("hello"), s.owner);
+    assert.equal(result.outcome, "submitted");
+    assert.deepEqual(s.writes, ["\x1b[200~hello\x1b[201~", "\r"]);
   } finally { s.manager.terminateAll(); }
 });

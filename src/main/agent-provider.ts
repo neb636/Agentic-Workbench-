@@ -24,6 +24,8 @@ export interface AgentProviderAdapter {
   args: (resume: boolean) => string[];
   detect: (screen: ScreenObservation) => AgentDetection;
   capabilities?: { planning: boolean };
+  /** Quiet time a first input prompt must hold before it accepts a submission; some CLIs draw it before startup dialogs. */
+  startupSettleMs?: number;
   submit: (request: AgentPromptRequest) => AgentSubmission;
   interrupt: string;
 }

@@ -18,7 +18,7 @@ export function detectCliScreen(kind: "codex" | "claude") {
     const result = (activity: AgentDetection["activity"], canSubmit: boolean, rule: string, reason: string, inputState: AgentDetection["inputState"] = "unavailable"): AgentDetection =>
       ({ activity, canSubmit, inputState, rule: `${kind}.${rule}`, reason });
     const working = kind === "codex"
-      ? /esc to (?:interrupt|cancel)|• (?:Working|Thinking)|(?:Working|Thinking)\s*[.…]/i.test(bottom)
+      ? /esc to (?:interrupt|cancel)|• (?:Working|Thinking)|(?:Working|Thinking)\s*[.…]|Waiting for startup/i.test(bottom)
       : /esc to (?:interrupt|cancel)|(?:^|\n)\s*[✻✽✶✳✢·] [^\n]+…/i.test(bottom);
     const prompt = kind === "codex" ? /^\s*›\s?(.*)$/ : /^\s*[❯>]\s?(.*)$/;
     let match = screen.cursorLine.match(prompt);
