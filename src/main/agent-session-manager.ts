@@ -24,6 +24,9 @@ interface Session {
   sending: boolean;
   disposed: boolean;
   inputWasEdited: boolean;
+  lastOutputAt: number;
+  settled: boolean;
+  settleTimer?: ReturnType<typeof setTimeout>;
 }
 
 export class AgentSessionManager {
@@ -51,16 +54,17 @@ export class AgentSessionManager {
     const session: Session = {
       id: randomUUID(), viewId: options.viewId, owner, provider, process: processInstance, terminal, serialize,
       sequence: 0, interrupted: false, working: false, sending: false, disposed: false, inputWasEdited: false,
+      lastOutputAt: Date.now(), settled: false,
       status: { lifecycle: "starting", activity: "unknown", canSubmit: false, inputState: "unavailable", reason: "Starting CLI…", rule: "startup", observedAt: Date.now(), completed: 0 },
     };
     this.sessions.set(session.id, session);
     // Headless parsing owns terminal replies, including when no renderer is attached.
     terminal.onData((data) => { if (!session.disposed && session.status.lifecycle !== "exited") processInstance.write(data); });
-    processInstance.onData((data) => terminal.write(data, () => {
+    processInstance.onData((data) => { session.lastOutputAt = Date.now(); terminal.write(data, () => {
       if (session.disposed) return;
       this.emit(session, { type: "data", data });
       this.detect(session);
-    }));
+    }); });
     processInstance.onExit(({ exitCode }) => {
       if (session.disposed) return;
       session.status = { ...session.status, lifecycle: exitCode === 0 ? "exited" : "failed", activity: "unknown", canSubmit: false, inputState: "unavailable",
@@ -125,18 +129,21 @@ export class AgentSessionManager {
       s.process.write("\r");
       s.inputWasEdited = false;
       s.interrupted = false;
+      // A CLI that is still busy, such as finishing startup, may hold the submitted draft until it can accept it.
       const submittedDeadline = Date.now() + 2000;
+      const heldDeadline = Date.now() + 30_000;
+      let current: AgentSessionStatus | undefined;
       do {
         await new Promise((resolve) => setTimeout(resolve, 50));
         await this.flush(s);
-        const current = this.sessions.get(id)?.status;
+        current = this.sessions.get(id)?.status;
         if (current?.lifecycle === "alive" && current.activity !== "waiting-for-input" && current.inputState === "empty") {
           return { outcome: "submitted", stage, message: request.intent === "plan"
             ? "Planning request handed to the CLI. Its Plan mode may remain active."
             : "Prompt handed to the CLI." };
         }
         if (current?.lifecycle !== "alive" || current.activity === "waiting-for-input") break;
-      } while (Date.now() < submittedDeadline);
+      } while (Date.now() < (current?.activity === "working" ? heldDeadline : submittedDeadline));
       throw new Error("Enter was delivered, but submission could not be confirmed. Inspect the terminal before retrying.");
     } catch (error) {
       return { outcome: stage === "none" ? "not-sent" : "uncertain", stage, message: error instanceof Error ? error.message : String(error) };
@@ -166,6 +173,7 @@ export class AgentSessionManager {
     const s = owner ? this.owned(id, owner) : this.sessions.get(id);
     if (!s) return;
     s.disposed = true;
+    clearTimeout(s.settleTimer);
     this.sessions.delete(id);
     if (s.status.lifecycle !== "exited" && s.status.lifecycle !== "failed") s.process.kill();
     s.terminal.dispose();
@@ -184,7 +192,17 @@ export class AgentSessionManager {
   }
   private detect(s: Session): void {
     if (s.disposed || s.status.lifecycle === "exited" || s.status.lifecycle === "failed") return;
-    const detection = s.provider.detect(this.observe(s));
+    let detection = s.provider.detect(this.observe(s));
+    let lifecycle: AgentSessionStatus["lifecycle"] = "alive";
+    if (!s.settled && detection.canSubmit) {
+      const wait = s.lastOutputAt + (s.provider.startupSettleMs ?? 0) - Date.now();
+      if (wait > 0) {
+        clearTimeout(s.settleTimer);
+        s.settleTimer = setTimeout(() => this.detect(s), wait);
+        lifecycle = "starting";
+        detection = { ...detection, canSubmit: false, rule: "startup", reason: "Waiting for the CLI to finish starting…" };
+      } else s.settled = true;
+    }
     if (detection.inputState === "empty") s.inputWasEdited = false;
     let completed = s.status.completed;
     if (detection.activity === "working") s.working = true;
@@ -192,7 +210,7 @@ export class AgentSessionManager {
       if (!s.interrupted) completed++;
       s.working = false;
     }
-    const next: AgentSessionStatus = { ...detection, lifecycle: "alive", completed, observedAt: Date.now() };
+    const next: AgentSessionStatus = { ...detection, lifecycle, completed, observedAt: Date.now() };
     const previous = s.status;
     s.status = next;
     if (previous.activity !== next.activity || previous.canSubmit !== next.canSubmit || previous.lifecycle !== next.lifecycle || previous.rule !== next.rule || previous.completed !== completed) this.emit(s, { type: "status", status: next });
